@@ -73,6 +73,7 @@ export default function App() {
             </Route>
           </Route>
 
+          <Route path="/dashboard" element={<Navigate to="/summary-report" replace />} />
           <Route path="/" element={<Navigate to="/summary-report" replace />} />
           <Route path="*" element={<Navigate to="/summary-report" replace />} />
         </Routes>
