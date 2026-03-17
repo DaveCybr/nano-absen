@@ -1,12 +1,12 @@
-import { Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '../../hooks/useAuth'
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 
 interface ProtectedRouteProps {
-  allowedRoles?: string[]
+  allowedRoles?: string[];
 }
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { session, employee, loading } = useAuth()
+  const { session, employee, loading } = useAuth();
 
   if (loading) {
     return (
@@ -16,16 +16,16 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
           <p className="text-sm text-gray-500">Memuat...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  if (!session) return <Navigate to="/auth/login" replace />
+  if (!session) return <Navigate to="/auth/login" replace />;
 
-  if (!employee) return <Navigate to="/auth/unauthorized" replace />
+  if (!employee) return <Navigate to="/auth/unauthorized" replace />;
 
   if (allowedRoles && !allowedRoles.includes(employee.access_type)) {
-    return <Navigate to="/auth/unauthorized" replace />
+    return <Navigate to="/auth/unauthorized" replace />;
   }
 
-  return <Outlet />
+  return <Outlet />;
 }

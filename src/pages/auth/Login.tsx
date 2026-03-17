@@ -8,7 +8,7 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const authError = searchParams.get("error");
 
-  if (!loading && session) return <Navigate to="/dashboard" replace />;
+  if (!loading && session) return <Navigate to="/summary-report" replace />;
 
   const handleGoogleLogin = async () => {
     setIsSigningIn(true);
@@ -33,9 +33,7 @@ export default function Login() {
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
               </svg>
             </div>
-            <span className="text-xl font-bold text-gray-900">
-              TEFA Presensi
-            </span>
+            <span className="text-xl font-bold text-gray-900">nano.HR</span>
           </div>
           <p className="text-sm text-gray-500">PT Nano Indonesia Sakti</p>
         </div>
@@ -99,7 +97,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          © 2026 PT Nano Indonesia Sakti · TEFA Presensi v1.0
+          © 2026 PT Nano Indonesia Sakti · nano.HR v1.0
         </p>
       </div>
     </div>

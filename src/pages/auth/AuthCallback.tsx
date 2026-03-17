@@ -30,7 +30,7 @@ export default function AuthCallback() {
         .maybeSingle();
 
       if (employee) {
-        navigate("/dashboard", { replace: true });
+        navigate("/summary-report", { replace: true });
         return;
       }
 

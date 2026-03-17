@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*, group:groups(id,name), position:positions(id,name,code)')
       .eq('auth_user_id', userId)
       .eq('is_active', true)
-      .single()
+      .maybeSingle()
 
     if (!error && data) {
       setEmployee(data as Employee)
