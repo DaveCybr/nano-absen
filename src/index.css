@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #f8f9fb;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+@layer components {
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 cursor-pointer transition-all duration-150 hover:bg-gray-100 hover:text-gray-900 select-none;
+  }
+  .nav-item.active { @apply bg-blue-50 text-blue-600 font-medium; }
+
+  .card { @apply bg-white rounded-xl border border-gray-100 p-6; }
+
+  .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; }
+  .badge-green  { @apply bg-green-100 text-green-700; }
+  .badge-red    { @apply bg-red-100 text-red-700; }
+  .badge-yellow { @apply bg-yellow-100 text-yellow-700; }
+  .badge-blue   { @apply bg-blue-100 text-blue-700; }
+  .badge-gray   { @apply bg-gray-100 text-gray-600; }
+  .badge-orange { @apply bg-orange-100 text-orange-700; }
+
+  .form-input {
+    @apply w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all;
+  }
+  .form-label { @apply block text-sm font-medium text-gray-700 mb-1.5; }
+
+  .btn { @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-primary  { @apply btn bg-blue-600 text-white hover:bg-blue-700 shadow-sm; }
+  .btn-secondary { @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50; }
+  .btn-danger   { @apply btn bg-red-600 text-white hover:bg-red-700; }
+
+  .data-table th { @apply px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100; }
+  .data-table td { @apply px-4 py-3 text-sm text-gray-700 border-b border-gray-50; }
+  .data-table tr:hover td { @apply bg-gray-50/50; }
+
+  .page-header { @apply text-xl font-semibold text-gray-900 mb-6; }
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
