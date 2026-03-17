@@ -122,11 +122,12 @@ export default function HierarchyPage() {
               {t.label}
             </button>
           ))}
-          <div className="ml-auto flex items-center pb-2">
-            <button onClick={openAdd} className="btn-primary">
-              <Plus size={14} /> Add {tab === 'position' ? 'Position' : tab === 'grade' ? 'Grade' : 'Status'}
-            </button>
-          </div>
+        </div>
+
+        <div className="flex items-center justify-end px-4 py-3 border-b border-gray-100">
+          <button onClick={openAdd} className="btn-primary">
+            <Plus size={14} /> Add {tab === 'position' ? 'Position' : tab === 'grade' ? 'Grade' : 'Status'}
+          </button>
         </div>
 
         <div className="overflow-x-auto">

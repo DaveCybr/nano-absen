@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { Download, Search, FileText } from "lucide-react";
+import { exportCsv, csvTime, csvMins } from "../../lib/exportCsv";
 import {
   Spinner,
   EmptyState,
@@ -12,6 +13,29 @@ import {
   formatMinutes,
 } from "../../components/ui";
 import type { Attendance, Employee, Group } from "../../types";
+import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
+import L from "leaflet";
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+const iconIn = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
+  iconRetinaUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+});
+
+const iconOut = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png",
+  iconRetinaUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+});
 
 interface AttendanceRow extends Attendance {
   employee: Employee & { group: Group | null };
@@ -30,7 +54,6 @@ export default function SummaryReport() {
   const [groupFilter, setGroupFilter] = useState("all");
   const [scheduleFilter, setScheduleFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
-  const [search, _setSearch] = useState("");
 
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -51,6 +74,42 @@ export default function SummaryReport() {
     out_location: 0,
     correction_location: 0,
   });
+
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      let q = supabase
+        .from("attendances")
+        .select(`*, employee:employees(full_name, employee_code, group:groups(name))`)
+        .gte("attendance_date", startDate)
+        .lte("attendance_date", endDate)
+        .order("attendance_date", { ascending: false });
+
+      if (groupFilter !== "all") q = q.eq("employees.group_id", groupFilter);
+      if (userFilter !== "all") q = q.eq("employee_id", userFilter);
+
+      const { data } = await q;
+      const rows = (data || []) as AttendanceRow[];
+
+      exportCsv(`summary-report_${startDate}_${endDate}`, [
+        "Tanggal", "Nama", "Kode", "Grup",
+        "Jam Masuk", "Status Masuk", "Lokasi Masuk",
+        "Jam Keluar", "Status Keluar", "Jam Kerja", "Terlambat",
+      ], rows.map(r => [
+        r.attendance_date,
+        r.employee?.full_name ?? '',
+        r.employee?.employee_code ?? '',
+        r.employee?.group?.name ?? '',
+        csvTime(r.time_in), r.status_in ?? '', r.location_in_status ?? '',
+        csvTime(r.time_out), r.status_out ?? '',
+        csvMins(r.work_minutes), csvMins(r.late_minutes),
+      ]));
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   // Detail modal
   const [detail, setDetail] = useState<DetailData | null>(null);
@@ -91,7 +150,7 @@ export default function SummaryReport() {
         .order("time_in", { ascending: true });
 
       if (groupFilter !== "all") {
-        query = query.eq("employee.group_id", groupFilter);
+        query = query.eq("employees.group_id", groupFilter);
       }
       if (userFilter !== "all") {
         query = query.eq("employee_id", userFilter);
@@ -104,46 +163,36 @@ export default function SummaryReport() {
 
       if (error) throw error;
 
-      const filtered = search
-        ? (data || []).filter((r: AttendanceRow) =>
-            r.employee?.full_name?.toLowerCase().includes(search.toLowerCase()),
-          )
-        : data || [];
-
-      setRows(filtered as AttendanceRow[]);
+      setRows((data || []) as AttendanceRow[]);
       setTotal(count || 0);
 
-      // Calculate stats from all data (not paginated)
-      const { data: allData } = await supabase
+      // Stats: same filters, minimal columns, no pagination
+      let statsQuery = supabase
         .from("attendances")
-        .select("status_in, location_in_status")
+        .select("status_in,location_in_status")
         .gte("attendance_date", startDate)
         .lte("attendance_date", endDate);
 
-      if (allData) {
+      if (groupFilter !== "all") statsQuery = statsQuery.eq("employees.group_id", groupFilter);
+      if (userFilter !== "all") statsQuery = statsQuery.eq("employee_id", userFilter);
+
+      const { data: statsData } = await statsQuery;
+      if (statsData) {
         setStats({
-          on_time: allData.filter((r) => r.status_in === "on_time").length,
-          in_tolerance: allData.filter((r) => r.status_in === "in_tolerance")
-            .length,
-          late: allData.filter((r) => r.status_in === "late").length,
-          correction: allData.filter((r) => r.status_in === "others").length,
-          in_location: allData.filter((r) => r.location_in_status === "in_area")
-            .length,
-          in_tolerance_location: allData.filter(
-            (r) => r.location_in_status === "tolerance",
-          ).length,
-          out_location: allData.filter(
-            (r) => r.location_in_status === "out_of_area",
-          ).length,
-          correction_location: allData.filter(
-            (r) => r.location_in_status === "correction",
-          ).length,
+          on_time:               statsData.filter((r) => r.status_in === "on_time").length,
+          in_tolerance:          statsData.filter((r) => r.status_in === "in_tolerance").length,
+          late:                  statsData.filter((r) => r.status_in === "late").length,
+          correction:            statsData.filter((r) => r.status_in === "others").length,
+          in_location:           statsData.filter((r) => r.location_in_status === "in_area").length,
+          in_tolerance_location: statsData.filter((r) => r.location_in_status === "tolerance").length,
+          out_location:          statsData.filter((r) => r.location_in_status === "out_of_area").length,
+          correction_location:   statsData.filter((r) => r.location_in_status === "correction").length,
         });
       }
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, groupFilter, userFilter, page, pageSize, search]);
+  }, [startDate, endDate, groupFilter, userFilter, page, pageSize]);
 
   useEffect(() => {
     fetchData();
@@ -226,8 +275,9 @@ export default function SummaryReport() {
           <button onClick={fetchData} className="btn-primary">
             <Search size={14} /> Search
           </button>
-          <button className="btn-secondary ml-auto">
-            <Download size={14} /> Download Report
+          <button onClick={handleDownload} disabled={downloading} className="btn-secondary ml-auto">
+            {downloading ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            {downloading ? 'Mengunduh...' : 'Download Report'}
           </button>
         </div>
       </div>
@@ -471,20 +521,68 @@ export default function SummaryReport() {
               ))}
             </div>
 
-            {/* Map placeholder */}
-            <div className="bg-gray-100 rounded-xl h-40 flex items-center justify-center mb-5">
+            {/* Map */}
+            <div className="rounded-xl overflow-hidden border border-gray-200 mb-5 h-52">
               {detail.attendance.lat_in ? (
-                <div className="text-center text-sm text-gray-500">
-                  <p className="font-medium">Koordinat Check-in</p>
-                  <p className="font-mono text-xs mt-1">
-                    {detail.attendance.lat_in?.toFixed(6)},{" "}
-                    {detail.attendance.lng_in?.toFixed(6)}
-                  </p>
-                </div>
+                <MapContainer
+                  key={detail.attendance.id}
+                  center={[detail.attendance.lat_in, detail.attendance.lng_in!]}
+                  zoom={16}
+                  className="w-full h-full"
+                  style={{ zIndex: 0 }}
+                  scrollWheelZoom={false}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  {/* Check-in marker */}
+                  <Marker position={[detail.attendance.lat_in, detail.attendance.lng_in!]} icon={iconIn}>
+                    <Popup>
+                      <p className="font-semibold text-xs">Check-in</p>
+                      <p className="text-xs text-gray-500 font-mono">{formatTime(detail.attendance.time_in)}</p>
+                    </Popup>
+                  </Marker>
+                  <Circle
+                    center={[detail.attendance.lat_in, detail.attendance.lng_in!]}
+                    radius={8}
+                    pathOptions={{ color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.25, weight: 2 }}
+                  />
+                  {/* Check-out marker */}
+                  {detail.attendance.lat_out && detail.attendance.lng_out && (
+                    <>
+                      <Marker position={[detail.attendance.lat_out, detail.attendance.lng_out]} icon={iconOut}>
+                        <Popup>
+                          <p className="font-semibold text-xs">Check-out</p>
+                          <p className="text-xs text-gray-500 font-mono">{formatTime(detail.attendance.time_out)}</p>
+                        </Popup>
+                      </Marker>
+                      <Circle
+                        center={[detail.attendance.lat_out, detail.attendance.lng_out]}
+                        radius={8}
+                        pathOptions={{ color: '#ea580c', fillColor: '#ea580c', fillOpacity: 0.25, weight: 2 }}
+                      />
+                    </>
+                  )}
+                </MapContainer>
               ) : (
-                <p className="text-gray-400 text-sm">Tidak ada data lokasi</p>
+                <div className="w-full h-full bg-gray-50 flex items-center justify-center">
+                  <p className="text-gray-400 text-sm">Tidak ada data lokasi</p>
+                </div>
               )}
             </div>
+            {detail.attendance.lat_in && (
+              <div className="flex gap-4 text-xs text-gray-500 font-mono -mt-3 mb-4 px-1">
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block" /> Check-in: {detail.attendance.lat_in.toFixed(6)}, {detail.attendance.lng_in?.toFixed(6)}
+                </span>
+                {detail.attendance.lat_out && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> Check-out: {detail.attendance.lat_out.toFixed(6)}, {detail.attendance.lng_out?.toFixed(6)}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Detail grid */}
             <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">

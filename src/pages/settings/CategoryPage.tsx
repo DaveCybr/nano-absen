@@ -129,11 +129,13 @@ export default function CategoryPage() {
               {t === "overtime" ? "Overtime Category" : "Claim Category"}
             </button>
           ))}
-          <div className="ml-auto flex items-center pb-2">
-            <button onClick={openAdd} className="btn-primary">
-              <Plus size={14} /> Add {tabLabel}
-            </button>
-          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center justify-end px-4 py-3 border-b border-gray-100">
+          <button onClick={openAdd} className="btn-primary">
+            <Plus size={14} /> Add {tabLabel}
+          </button>
         </div>
 
         {/* Table */}

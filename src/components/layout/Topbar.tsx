@@ -33,7 +33,7 @@ export default function Topbar() {
   const displayName =
     employee?.full_name || user?.user_metadata?.full_name || "Admin";
   const displayEmail = user?.email || "";
-  const initials = displayName.slice(0, 2).toUpperCase();
+  const initials = (displayName || "Ad").slice(0, 2).toUpperCase();
 
   const roleLabel: Record<string, string> = {
     super_admin: "Super Admin",
@@ -74,13 +74,6 @@ export default function Topbar() {
 
         {/* Right */}
         <div className="flex items-center gap-2">
-          {/* Plan badge */}
-          <span className="text-xs text-gray-400 font-medium hidden sm:block">
-            Umkm
-          </span>
-          <span className="badge badge-blue text-[10px] hidden sm:flex">
-            246 days left
-          </span>
           <span className="text-xs text-gray-300 mx-1 hidden sm:block">|</span>
           <span className="text-xs text-gray-500 hidden sm:block">English</span>
 

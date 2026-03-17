@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Download, Search } from 'lucide-react'
 import { Spinner, EmptyState, Pagination, formatMinutes } from '../../components/ui'
+import { exportCsv, csvMins } from '../../lib/exportCsv'
 import type { Group } from '../../types'
 
 interface MonthlyRow {
@@ -37,44 +38,88 @@ export default function MonthlyReportPage() {
       .then(({ data }) => setGroups((data as Group[]) || []))
   }, [])
 
+  const [downloading, setDownloading] = useState(false)
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      let empQuery = supabase.from('employees').select('id,full_name,employee_code').eq('is_active', true).order('full_name')
+      if (groupFilter !== 'all') empQuery = empQuery.eq('group_id', groupFilter)
+      const { data: employees } = await empQuery
+      if (!employees?.length) return
+
+      const empIds = employees.map(e => e.id)
+      const { data: attendances } = await supabase
+        .from('attendances').select('employee_id,late_minutes,deduction_amount,work_minutes')
+        .in('employee_id', empIds).gte('attendance_date', startDate).lte('attendance_date', endDate)
+
+      const attMap = (attendances || []).reduce<Record<string, typeof attendances>>((acc, r) => {
+        if (!acc[r.employee_id]) acc[r.employee_id] = []
+        acc[r.employee_id].push(r)
+        return acc
+      }, {})
+
+      exportCsv(`monthly-report_${startDate}_${endDate}`, [
+        'Kode', 'Nama', 'Waktu Terlambat', 'Potongan (Rp)', 'Jam Kerja',
+      ], employees.map(emp => {
+        const d = attMap[emp.id] || []
+        return [
+          emp.employee_code, emp.full_name,
+          csvMins(d.reduce((s, r) => s + (r.late_minutes || 0), 0)),
+          d.reduce((s, r) => s + (r.deduction_amount || 0), 0),
+          csvMins(d.reduce((s, r) => s + (r.work_minutes || 0), 0)),
+        ]
+      }))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const fetchReport = useCallback(async () => {
     setLoading(true)
     try {
       let empQuery = supabase
         .from('employees')
-        .select('id,full_name,employee_code')
+        .select('id,full_name,employee_code', { count: 'exact' })
         .eq('is_active', true)
         .order('full_name')
+        .range((page - 1) * pageSize, page * pageSize - 1)
 
       if (groupFilter !== 'all') empQuery = empQuery.eq('group_id', groupFilter)
 
-      const { data: employees } = await empQuery
+      const { data: employees, count } = await empQuery
       if (!employees) { setLoading(false); return }
 
-      setTotal(employees.length)
+      setTotal(count || 0)
 
-      const paginated = employees.slice((page - 1) * pageSize, page * pageSize)
+      const empIds = employees.map(e => e.id)
 
-      const results: MonthlyRow[] = await Promise.all(
-        paginated.map(async emp => {
-          const { data } = await supabase
-            .from('attendances')
-            .select('late_minutes,deduction_amount,work_minutes')
-            .eq('employee_id', emp.id)
-            .gte('attendance_date', startDate)
-            .lte('attendance_date', endDate)
+      // Single batch query — no more N+1
+      const { data: attendances } = await supabase
+        .from('attendances')
+        .select('employee_id,late_minutes,deduction_amount,work_minutes')
+        .in('employee_id', empIds)
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
 
-          return {
-            employee_id:       emp.id,
-            full_name:         emp.full_name,
-            employee_code:     emp.employee_code,
-            deduction_minutes: (data || []).reduce((s, r) => s + (r.late_minutes || 0), 0),
-            deduction_amount:  (data || []).reduce((s, r) => s + (r.deduction_amount || 0), 0),
-            work_minutes:      (data || []).reduce((s, r) => s + (r.work_minutes || 0), 0),
-            work_amount:       0,
-          }
-        })
-      )
+      const attMap = (attendances || []).reduce<Record<string, typeof attendances>>((acc, r) => {
+        if (!acc[r.employee_id]) acc[r.employee_id] = []
+        acc[r.employee_id].push(r)
+        return acc
+      }, {})
+
+      const results: MonthlyRow[] = employees.map(emp => {
+        const d = attMap[emp.id] || []
+        return {
+          employee_id:       emp.id,
+          full_name:         emp.full_name,
+          employee_code:     emp.employee_code,
+          deduction_minutes: d.reduce((s, r) => s + (r.late_minutes || 0), 0),
+          deduction_amount:  d.reduce((s, r) => s + (r.deduction_amount || 0), 0),
+          work_minutes:      d.reduce((s, r) => s + (r.work_minutes || 0), 0),
+          work_amount:       0,
+        }
+      })
 
       setRows(results)
       setSummary({
@@ -118,8 +163,9 @@ export default function MonthlyReportPage() {
           <button onClick={fetchReport} className="btn-primary">
             <Search size={14} /> Search
           </button>
-          <button className="btn-secondary ml-auto">
-            <Download size={14} /> Download Report
+          <button onClick={handleDownload} disabled={downloading} className="btn-secondary ml-auto">
+            {downloading ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            {downloading ? 'Mengunduh...' : 'Download Report'}
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Download, Search } from 'lucide-react'
 import { Spinner, EmptyState, Pagination } from '../../components/ui'
+import { exportCsv } from '../../lib/exportCsv'
 import type { Group } from '../../types'
 
 interface SummaryRow {
@@ -45,54 +46,107 @@ export default function UserSummaryPage() {
     (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000
   ) + 1
 
+  const [downloading, setDownloading] = useState(false)
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      let empQuery = supabase
+        .from('employees')
+        .select('id,full_name,group:groups(name),position:positions(name)')
+        .eq('is_active', true).order('full_name')
+      if (groupFilter !== 'all') empQuery = empQuery.eq('group_id', groupFilter)
+      const { data: employees } = await empQuery
+      if (!employees?.length) return
+
+      const empIds = employees.map((e: any) => e.id)
+      const { data: attendances } = await supabase
+        .from('attendances').select('employee_id,status_in,location_in_status,time_out')
+        .in('employee_id', empIds).gte('attendance_date', startDate).lte('attendance_date', endDate)
+
+      const attMap = (attendances || []).reduce<Record<string, typeof attendances>>((acc, r) => {
+        if (!acc[r.employee_id]) acc[r.employee_id] = []
+        acc[r.employee_id].push(r)
+        return acc
+      }, {})
+
+      exportCsv(`user-summary_${startDate}_${endDate}`, [
+        'Nama', 'Jabatan', 'Grup',
+        'Tepat Waktu', 'Toleransi', 'Terlambat',
+        'Lokasi Dalam', 'Toleransi Lokasi', 'Diluar Lokasi',
+        'Total Hadir', 'Tidak Hadir',
+      ], (employees as any[]).map(emp => {
+        const d = attMap[emp.id] || []
+        return [
+          emp.full_name, emp.position?.name ?? '-', emp.group?.name ?? '-',
+          d.filter((r: any) => r.status_in === 'on_time').length,
+          d.filter((r: any) => r.status_in === 'in_tolerance').length,
+          d.filter((r: any) => r.status_in === 'late').length,
+          d.filter((r: any) => r.location_in_status === 'in_area').length,
+          d.filter((r: any) => r.location_in_status === 'tolerance').length,
+          d.filter((r: any) => r.location_in_status === 'out_of_area').length,
+          d.filter((r: any) => r.time_out).length,
+          Math.max(0, workingDays - d.length),
+        ]
+      }))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const fetchSummary = useCallback(async () => {
     setLoading(true)
     try {
       let empQuery = supabase
         .from('employees')
-        .select('id,full_name,employee_code,group:groups(name),position:positions(name)')
+        .select('id,full_name,employee_code,group:groups(name),position:positions(name)', { count: 'exact' })
         .eq('is_active', true)
         .order('full_name')
+        .range((page - 1) * pageSize, page * pageSize - 1)
 
       if (groupFilter !== 'all') empQuery = empQuery.eq('group_id', groupFilter)
 
-      const { data: employees } = await empQuery
+      const { data: employees, count } = await empQuery
       if (!employees) { setLoading(false); return }
 
-      setTotal(employees.length)
-      const paginated = employees.slice((page - 1) * pageSize, page * pageSize)
+      setTotal(count || 0)
+      const empIds = employees.map((e: any) => e.id)
 
-      const results: SummaryRow[] = await Promise.all(
-        paginated.map(async (emp: any) => {
-          const { data } = await supabase
-            .from('attendances')
-            .select('status_in,location_in_status,time_out')
-            .eq('employee_id', emp.id)
-            .gte('attendance_date', startDate)
-            .lte('attendance_date', endDate)
+      // Single batch query — no more N+1
+      const { data: attendances } = await supabase
+        .from('attendances')
+        .select('employee_id,status_in,location_in_status,time_out')
+        .in('employee_id', empIds)
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
 
-          const d = data || []
-          const total_present = d.filter(r => r.time_out).length
+      const attMap = (attendances || []).reduce<Record<string, typeof attendances>>((acc, r) => {
+        if (!acc[r.employee_id]) acc[r.employee_id] = []
+        acc[r.employee_id].push(r)
+        return acc
+      }, {})
 
-          return {
-            employee_id:         emp.id,
-            full_name:           emp.full_name,
-            position:            emp.position?.name || '-',
-            group_name:          emp.group?.name || '-',
-            on_time:             d.filter(r => r.status_in === 'on_time').length,
-            in_tolerance:        d.filter(r => r.status_in === 'in_tolerance').length,
-            late:                d.filter(r => r.status_in === 'late').length,
-            leave:               0,
-            correction_time:     d.filter(r => r.status_in === 'others').length,
-            in_location:         d.filter(r => r.location_in_status === 'in_area').length,
-            tolerance_location:  d.filter(r => r.location_in_status === 'tolerance').length,
-            out_location:        d.filter(r => r.location_in_status === 'out_of_area').length,
-            correction_location: d.filter(r => r.location_in_status === 'correction').length,
-            total_present,
-            absent:              Math.max(0, workingDays - d.length),
-          }
-        })
-      )
+      const results: SummaryRow[] = employees.map((emp: any) => {
+        const d = attMap[emp.id] || []
+        const total_present = d.filter(r => r.time_out).length
+        return {
+          employee_id:         emp.id,
+          full_name:           emp.full_name,
+          position:            emp.position?.name || '-',
+          group_name:          emp.group?.name || '-',
+          on_time:             d.filter(r => r.status_in === 'on_time').length,
+          in_tolerance:        d.filter(r => r.status_in === 'in_tolerance').length,
+          late:                d.filter(r => r.status_in === 'late').length,
+          leave:               0,
+          correction_time:     d.filter(r => r.status_in === 'others').length,
+          in_location:         d.filter(r => r.location_in_status === 'in_area').length,
+          tolerance_location:  d.filter(r => r.location_in_status === 'tolerance').length,
+          out_location:        d.filter(r => r.location_in_status === 'out_of_area').length,
+          correction_location: d.filter(r => r.location_in_status === 'correction').length,
+          total_present,
+          absent: Math.max(0, workingDays - d.length),
+        }
+      })
 
       setRows(results)
     } finally {
@@ -134,8 +188,9 @@ export default function UserSummaryPage() {
           <button onClick={fetchSummary} className="btn-primary">
             <Search size={14} /> Search
           </button>
-          <button className="btn-secondary ml-auto">
-            <Download size={14} /> Download Report
+          <button onClick={handleDownload} disabled={downloading} className="btn-secondary ml-auto">
+            {downloading ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            {downloading ? 'Mengunduh...' : 'Download Report'}
           </button>
         </div>
       </div>

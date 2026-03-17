@@ -212,12 +212,40 @@ export default function ZonesPage() {
     }
   };
 
+  // Reverse geocode lat/lng → fill office_address
+  const reverseGeocode = async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { "Accept-Language": "id" } },
+      );
+      const data = await res.json();
+      if (data?.address) {
+        const a = data.address;
+        const parts = [
+          a.road || a.pedestrian || a.footway,
+          a.suburb || a.village || a.hamlet,
+          a.city || a.town || a.county,
+        ].filter(Boolean);
+        setField("office_address", parts.join(", ") || data.display_name.split(",").slice(0, 3).join(","));
+      }
+    } catch {
+      // silently ignore reverse geocoding errors
+    }
+  };
+
+  // Pick location: set coords + auto-fill address
+  const handlePickLocation = (lat: number, lng: number) => {
+    setField("latitude", lat.toFixed(6));
+    setField("longitude", lng.toFixed(6));
+    reverseGeocode(lat, lng);
+  };
+
   // Get current GPS location
   const handleMyLocation = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition((pos) => {
-      setField("latitude", pos.coords.latitude.toFixed(6));
-      setField("longitude", pos.coords.longitude.toFixed(6));
+      handlePickLocation(pos.coords.latitude, pos.coords.longitude);
     });
   };
 
@@ -521,22 +549,14 @@ export default function ZonesPage() {
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                <MapClickHandler
-                  onPick={(lat, lng) => {
-                    setField("latitude", lat.toFixed(6));
-                    setField("longitude", lng.toFixed(6));
-                  }}
-                />
+                <MapClickHandler onPick={handlePickLocation} />
                 {hasCoords && <FlyToLocation lat={modalLat} lng={modalLng} />}
                 {hasCoords && (
                   <DraggableMarker
                     lat={modalLat}
                     lng={modalLng}
                     radius={parseInt(form.radius_meters) || 200}
-                    onDrag={(lat, lng) => {
-                      setField("latitude", lat.toFixed(6));
-                      setField("longitude", lng.toFixed(6));
-                    }}
+                    onDrag={handlePickLocation}
                   />
                 )}
               </MapContainer>

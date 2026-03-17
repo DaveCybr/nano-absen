@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Search, Download } from 'lucide-react'
 import { Spinner, EmptyState, Pagination, StatusBadge, LocationBadge, formatTime } from '../../components/ui'
+import { exportCsv, csvTime, csvMins } from '../../lib/exportCsv'
 import type { Group } from '../../types'
 
 interface ActivityRow {
@@ -56,16 +57,12 @@ export default function ActivityReportPage() {
         .order('attendance_date', { ascending: false })
         .order('time_in', { ascending: false })
 
+      if (groupFilter !== 'all') q = q.eq('employees.group_id', groupFilter)
+      if (search) q = q.ilike('employees.full_name', `%${search}%`)
+
       const { data, count } = await q.range((page - 1) * pageSize, page * pageSize - 1)
 
-      let filtered = (data || []) as unknown as ActivityRow[]
-      if (search) {
-        filtered = filtered.filter(r =>
-          r.employee?.full_name?.toLowerCase().includes(search.toLowerCase())
-        )
-      }
-
-      setRows(filtered)
+      setRows((data || []) as unknown as ActivityRow[])
       setTotal(count || 0)
     } finally {
       setLoading(false)
@@ -73,6 +70,38 @@ export default function ActivityReportPage() {
   }, [startDate, endDate, groupFilter, search, page, pageSize])
 
   useEffect(() => { fetchActivities() }, [fetchActivities])
+
+  const [downloading, setDownloading] = useState(false)
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      let q = supabase
+        .from('attendances')
+        .select('attendance_date,time_in,time_out,status_in,status_out,location_in_status,location_out_status,work_minutes,late_minutes,employee:employees(full_name,employee_code,group:groups(name))')
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
+        .order('attendance_date', { ascending: false })
+
+      if (groupFilter !== 'all') q = q.eq('employees.group_id', groupFilter)
+      if (search) q = q.ilike('employees.full_name', `%${search}%`)
+
+      const { data } = await q
+      exportCsv(`activity-report_${startDate}_${endDate}`, [
+        'Tanggal', 'Nama', 'Kode', 'Grup',
+        'Jam Masuk', 'Status Masuk', 'Lokasi Masuk',
+        'Jam Keluar', 'Status Keluar', 'Jam Kerja', 'Terlambat',
+      ], (data || []).map((r: any) => [
+        r.attendance_date,
+        r.employee?.full_name ?? '', r.employee?.employee_code ?? '', r.employee?.group?.name ?? '',
+        csvTime(r.time_in), r.status_in ?? '', r.location_in_status ?? '',
+        csvTime(r.time_out), r.status_out ?? '',
+        csvMins(r.work_minutes), csvMins(r.late_minutes),
+      ]))
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const fmtMins = (m: number) => {
     if (!m) return '-'
@@ -111,7 +140,10 @@ export default function ActivityReportPage() {
               value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
           </div>
           <button onClick={fetchActivities} className="btn-primary"><Search size={14} /> Search</button>
-          <button className="btn-secondary ml-auto"><Download size={14} /> Download</button>
+          <button onClick={handleDownload} disabled={downloading} className="btn-secondary ml-auto">
+            {downloading ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            {downloading ? 'Mengunduh...' : 'Download'}
+          </button>
         </div>
       </div>
 

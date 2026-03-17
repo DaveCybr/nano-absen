@@ -22,16 +22,15 @@ export default function IssueAttendancePage() {
   const [date, setDate]             = useState(today)
   const [scheduleFilter, setScheduleFilter] = useState('all')
   const [search, setSearch]         = useState('')
-  const [rows, setRows]             = useState<IssueRow[]>([])
+  const [allEvents, setAllEvents]   = useState<IssueRow[]>([])
   const [loading, setLoading]       = useState(false)
   const [page, setPage]             = useState(1)
   const [pageSize, setPageSize]     = useState(10)
-  const [total, setTotal]           = useState(0)
 
   const fetchIssues = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, count } = await supabase
+      const { data } = await supabase
         .from('attendances')
         .select(`
           id, employee_id, attendance_date,
@@ -39,33 +38,32 @@ export default function IssueAttendancePage() {
           status_in, status_out,
           location_in_status, location_out_status,
           employee:employees(full_name, face_photo_url)
-        `, { count: 'exact' })
+        `)
         .eq('attendance_date', date)
         .order('time_in', { ascending: false })
-        .range((page - 1) * pageSize, page * pageSize - 1)
 
-      // Flatten into check-in and check-out events
-      const issues: IssueRow[] = []
+      // Flatten each attendance record into separate check_in / check_out events
+      const events: IssueRow[] = []
       for (const r of (data || []) as any[]) {
-        const name = r.employee?.full_name?.toLowerCase() || ''
-        if (search && !name.includes(search.toLowerCase())) continue
-
-        // Check-out event first (more recent)
-        if (r.time_out) {
-          issues.push({ ...r, type: 'check_out' })
-        }
-        // Check-in event
-        issues.push({ ...r, type: 'check_in' })
+        if (r.time_out) events.push({ ...r, type: 'check_out' })
+        events.push({ ...r, type: 'check_in' })
       }
-
-      setRows(issues)
-      setTotal(count || 0)
+      setAllEvents(events)
+      setPage(1)
     } finally {
       setLoading(false)
     }
-  }, [date, search, page, pageSize])
+  }, [date])
 
   useEffect(() => { fetchIssues() }, [fetchIssues])
+
+  // Filter by search client-side, then paginate the events
+  const filtered = search
+    ? allEvents.filter(r => r.employee?.full_name?.toLowerCase().includes(search.toLowerCase()))
+    : allEvents
+
+  const total = filtered.length
+  const rows  = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <div>

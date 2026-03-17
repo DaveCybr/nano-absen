@@ -197,13 +197,11 @@ export function Modal({
 // ─── Format helpers ───────────────────────────────────────────────────────────
 export function formatTime(ts: string | null): string {
   if (!ts) return "-";
-  return (
-    new Date(ts).toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }) + " WIB"
-  );
+  return new Date(ts).toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 export function formatDate(d: string): string {
@@ -219,5 +217,6 @@ export function formatMinutes(mins: number): string {
   if (!mins) return "-";
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Download, Search } from 'lucide-react'
 import { Spinner, EmptyState, Pagination, formatMinutes } from '../../components/ui'
+import { exportCsv, csvTime, csvMins } from '../../lib/exportCsv'
 import type { Employee, Group, Attendance } from '../../types'
 
 interface UserReportRow {
@@ -100,6 +101,37 @@ export default function UserReportPage() {
 
   useEffect(() => { fetchReport() }, [fetchReport])
 
+  const [downloading, setDownloading] = useState(false)
+
+  const handleDownload = async () => {
+    if (!userFilter || !selectedEmployee) return
+    setDownloading(true)
+    try {
+      const { data } = await supabase
+        .from('attendances')
+        .select('*')
+        .eq('employee_id', userFilter)
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
+        .order('attendance_date', { ascending: false })
+
+      exportCsv(`user-report_${selectedEmployee.employee_code}_${startDate}_${endDate}`, [
+        'Tanggal', 'Jam Masuk', 'Jam Keluar', 'Alasan Masuk', 'Alasan Keluar',
+        'Koordinat Masuk', 'Koordinat Keluar', 'Jam Kerja', 'Terlambat', 'Potongan (Rp)',
+      ], (data || []).map((r: Attendance) => [
+        r.attendance_date,
+        csvTime(r.time_in), csvTime(r.time_out),
+        r.reason_in ?? '-', r.reason_out ?? '-',
+        r.lat_in && r.lng_in ? `${r.lat_in},${r.lng_in}` : '-',
+        r.lat_out && r.lng_out ? `${r.lat_out},${r.lng_out}` : '-',
+        csvMins(r.work_minutes), csvMins(r.late_minutes),
+        r.deduction_amount ?? 0,
+      ]))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const formatCoord = (lat: number | null, lng: number | null) => {
     if (!lat || !lng) return '-'
     return `${lat.toFixed(6)}, ${lng.toFixed(6)}`
@@ -148,8 +180,9 @@ export default function UserReportPage() {
           <button onClick={fetchReport} className="btn-primary">
             <Search size={14} /> Search
           </button>
-          <button className="btn-secondary ml-auto">
-            <Download size={14} /> Download Report
+          <button onClick={handleDownload} disabled={downloading || !userFilter} className="btn-secondary ml-auto">
+            {downloading ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            {downloading ? 'Mengunduh...' : 'Download Report'}
           </button>
         </div>
       </div>

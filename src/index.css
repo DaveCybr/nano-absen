@@ -138,6 +138,99 @@
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 2px; }
 
+/* FullCalendar overrides */
+.fc-wrapper .fc {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+.fc-wrapper .fc-toolbar {
+  padding: 14px 20px;
+  margin-bottom: 0 !important;
+}
+.fc-wrapper .fc-toolbar-title {
+  font-size: 15px !important;
+  font-weight: 600;
+  color: #111827;
+}
+.fc-wrapper .fc-button-primary {
+  background-color: white !important;
+  border-color: #e5e7eb !important;
+  color: #374151 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+}
+.fc-wrapper .fc-button-primary:hover {
+  background-color: #f9fafb !important;
+}
+.fc-wrapper .fc-button-primary:not(:disabled):active,
+.fc-wrapper .fc-button-primary:not(:disabled).fc-button-active {
+  background-color: #eff6ff !important;
+  color: #2563eb !important;
+  border-color: #bfdbfe !important;
+  box-shadow: none !important;
+}
+.fc-wrapper .fc-col-header-cell {
+  background: #f9fafb;
+}
+.fc-wrapper .fc-col-header-cell-cushion {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-decoration: none !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 0;
+}
+.fc-wrapper .fc-daygrid-day-number {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  text-decoration: none !important;
+}
+.fc-wrapper .fc-day-today {
+  background: #eff6ff !important;
+}
+.fc-wrapper .fc-day-today .fc-daygrid-day-number {
+  background: #2563eb;
+  color: white !important;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  margin: 2px;
+}
+.fc-wrapper .fc-day-sun .fc-daygrid-day-number,
+.fc-wrapper .fc-day-sat .fc-daygrid-day-number {
+  color: #ef4444;
+}
+.fc-wrapper .fc-day-today.fc-day-sun .fc-daygrid-day-number,
+.fc-wrapper .fc-day-today.fc-day-sat .fc-daygrid-day-number {
+  color: white !important;
+}
+.fc-wrapper .fc-event {
+  border: none !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+}
+.fc-wrapper .fc-event:hover {
+  filter: brightness(0.92);
+}
+.fc-wrapper .fc-daygrid-more-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+}
+.fc-wrapper .fc-daygrid-day-frame {
+  min-height: 100px;
+}
+
 .leaflet-container {
   font-family: 'Plus Jakarta Sans', sans-serif !important;
   border-radius: 12px;
