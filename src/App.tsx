@@ -1,4 +1,39 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+
+const PAGE_TITLES: Record<string, string> = {
+  "/summary-report": "Summary Report",
+  "/attendance/location-map": "Location Map",
+  "/attendance/issue": "Issue Attendance",
+  "/report/user": "User Report",
+  "/report/monthly": "Monthly Report",
+  "/report/activity": "Activity Report",
+  "/report/user-summary": "User Summary",
+  "/manage/shifting": "Shifting",
+  "/manage/approval": "Approval",
+  "/manage/leave": "Leave",
+  "/manage/calendar": "Calendar",
+  "/manage/news-feed": "News Feed",
+  "/manage/audit-trail": "Audit Trail",
+  "/settings/employee": "Employee",
+  "/settings/groups": "Groups",
+  "/settings/hierarchy": "Hierarchy",
+  "/settings/category": "Category",
+  "/settings/zones": "Zones",
+  "/settings/company": "Company",
+  "/auth/login": "Login",
+  "/auth/unauthorized": "Unauthorized",
+  "/setup": "Setup",
+};
+
+function TitleManager() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const title = PAGE_TITLES[pathname];
+    document.title = title ? `${title} | nano.HR` : "nano.HR";
+  }, [pathname]);
+  return null;
+}
 import { AuthProvider } from "./hooks/useAuth";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ui/ProtectedRoute";
@@ -32,6 +67,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <TitleManager />
         <Routes>
           {/* Public */}
           <Route path="/auth/login" element={<Login />} />
