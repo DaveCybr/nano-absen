@@ -102,15 +102,16 @@ export default function ApprovalPage() {
     let q = supabase
       .from("leave_requests")
       .select(
-        `*, employee:employees(full_name,employee_code,group:groups(name)), leave_category:leave_categories(leave_name,leave_type)`,
+        `*, employee:employees!leave_requests_employee_id_fkey(full_name,employee_code,group:groups!left(name)), leave_category:leave_categories!left(leave_name,leave_type)`,
         { count: "exact" },
       )
       .order("created_at", { ascending: false });
     if (statusFilter !== "all") q = q.eq("status", statusFilter);
-    const { data, count } = await q.range(
+    const { data, count, error } = await q.range(
       (page - 1) * pageSize,
       page * pageSize - 1,
     );
+    if (error) console.error('fetchLeave error:', error);
     setLeaveRows((data || []) as LeaveRequestRow[]);
     setLeaveTotal(count || 0);
     setLeaveLoading(false);
@@ -122,7 +123,7 @@ export default function ApprovalPage() {
     let q = supabase
       .from("overtime_requests")
       .select(
-        `*, employee:employees(full_name,employee_code,group:groups(name)), overtime_category:overtime_categories(name_id,code)`,
+        `*, employee:employees!overtime_requests_employee_id_fkey(full_name,employee_code,group:groups!left(name)), overtime_category:overtime_categories!left(name_id,code)`,
         { count: "exact" },
       )
       .order("created_at", { ascending: false });
@@ -142,7 +143,7 @@ export default function ApprovalPage() {
     let q = supabase
       .from("attendance_corrections")
       .select(
-        `*, employee:employees(full_name,employee_code,group:groups(name)), attendance:attendances(attendance_date,time_in,time_out)`,
+        `*, employee:employees!attendance_corrections_employee_id_fkey(full_name,employee_code,group:groups!left(name)), attendance:attendances!left(attendance_date,time_in,time_out)`,
         { count: "exact" },
       )
       .order("created_at", { ascending: false });

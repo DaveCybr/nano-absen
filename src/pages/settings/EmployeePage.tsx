@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
-import { Plus, Download, Edit2, UserCheck, Search } from "lucide-react";
+import { Plus, Download, Edit2, UserCheck, Search, KeyRound, CheckCircle } from "lucide-react";
 import { Spinner, EmptyState, Pagination, Modal } from "../../components/ui";
 import type {
   Employee,
@@ -41,6 +41,8 @@ const EMPTY_FORM = {
   join_date: "",
   resignation_date: "",
   is_active: true,
+  password: "",
+  confirm_password: "",
 };
 
 export default function EmployeePage() {
@@ -49,6 +51,7 @@ export default function EmployeePage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [empStatuses, setEmpStatuses] = useState<EmploymentStatus[]>([]);
+  const [zones, setZones] = useState<{ id: string; office_name: string }[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -65,11 +68,17 @@ export default function EmployeePage() {
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<EmployeeWithRelations | null>(
-    null,
-  );
+  const [editTarget, setEditTarget] = useState<EmployeeWithRelations | null>(null);
   const [form, setForm] = useState<typeof EMPTY_FORM>({ ...EMPTY_FORM });
   const [formError, setFormError] = useState("");
+
+  // Reset Password Modal
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<EmployeeWithRelations | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState("");
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState(false);
 
   // Load master data
   useEffect(() => {
@@ -93,6 +102,11 @@ export default function EmployeePage() {
       .select("id,name_id,name_en")
       .order("name_id")
       .then(({ data }) => setEmpStatuses((data as EmploymentStatus[]) || []));
+    supabase
+      .from("zones")
+      .select("id,office_name")
+      .order("office_name")
+      .then(({ data }) => setZones((data as { id: string; office_name: string }[]) || []));
   }, []);
 
   const fetchEmployees = useCallback(async () => {
@@ -113,8 +127,7 @@ export default function EmployeePage() {
         .order("full_name");
 
       if (groupFilter !== "all") query = query.eq("group_id", groupFilter);
-      if (statusFilter !== "all")
-        query = query.eq("working_status", statusFilter);
+      if (statusFilter !== "all") query = query.eq("working_status", statusFilter);
       if (accessFilter !== "all") query = query.eq("access_type", accessFilter);
       if (search) query = query.ilike("full_name", `%${search}%`);
 
@@ -135,9 +148,14 @@ export default function EmployeePage() {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  const openAdd = () => {
+  const openAdd = async () => {
     setEditTarget(null);
-    setForm({ ...EMPTY_FORM });
+    // Auto-generate employee_code dari jumlah karyawan yang ada
+    const { count } = await supabase
+      .from("employees")
+      .select("*", { count: "exact", head: true });
+    const nextCode = `EMP${String((count || 0) + 1).padStart(3, "0")}`;
+    setForm({ ...EMPTY_FORM, employee_code: nextCode });
     setFormError("");
     setModalOpen(true);
   };
@@ -167,76 +185,215 @@ export default function EmployeePage() {
       join_date: emp.join_date || "",
       resignation_date: emp.resignation_date || "",
       is_active: emp.is_active,
+      password: "",
+      confirm_password: "",
     });
     setFormError("");
     setModalOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.full_name.trim()) {
-      setFormError("Nama lengkap wajib diisi");
-      return;
+    if (!form.full_name.trim()) { setFormError("Nama lengkap wajib diisi"); return; }
+    if (!form.email.trim()) { setFormError("Email wajib diisi"); return; }
+    if (!form.employee_code.trim()) { setFormError("ID karyawan wajib diisi"); return; }
+
+    if (!editTarget) {
+      if (!form.password || form.password.length < 6) {
+        setFormError("Password minimal 6 karakter");
+        return;
+      }
+      if (form.password !== form.confirm_password) {
+        setFormError("Konfirmasi password tidak cocok");
+        return;
+      }
     }
-    if (!form.email.trim()) {
-      setFormError("Email wajib diisi");
-      return;
-    }
-    if (!form.employee_code.trim()) {
-      setFormError("ID karyawan wajib diisi");
-      return;
-    }
+
     setFormError("");
     setSaving(true);
 
-    const payload = {
-      employee_code: form.employee_code,
-      full_name: form.full_name,
-      email: form.email,
-      phone: form.phone || null,
-      ktp_number: form.ktp_number || null,
-      npwp: form.npwp || null,
-      date_of_birth: form.date_of_birth || null,
-      place_of_birth: form.place_of_birth || null,
-      gender: form.gender || null,
-      religion: form.religion || null,
-      marital_status: form.marital_status || null,
-      citizenship: form.citizenship || "Indonesia",
-      group_id: form.group_id || null,
-      position_id: form.position_id || null,
-      grade_id: form.grade_id || null,
-      employment_status_id: form.employment_status_id || null,
-      work_location: form.work_location || null,
-      access_type: form.access_type,
-      working_status: form.working_status,
-      join_date: form.join_date || null,
-      resignation_date: form.resignation_date || null,
-      is_active: form.is_active,
-      updated_at: new Date().toISOString(),
-    };
-
     try {
-      if (editTarget) {
+      if (!editTarget) {
+        // ── MODE TAMBAH BARU ──────────────────────────────────────
+
+        // 1. Buat auth user via Edge Function
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setFormError("Sesi login tidak valid. Silakan refresh halaman dan login ulang.");
+          setSaving(false);
+          return;
+        }
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-employee-user`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              email: form.email,
+              password: form.password,
+              full_name: form.full_name,
+            }),
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const errMsg = result.error || result.message || "";
+          if (
+            errMsg.includes("already registered") ||
+            errMsg.includes("already been registered")
+          ) {
+            setFormError("Email ini sudah terdaftar di sistem");
+          } else if (response.status === 401) {
+            setFormError("Akses ditolak: sesi expired. Silakan refresh halaman dan login ulang.");
+          } else if (response.status === 403) {
+            setFormError("Akses ditolak: akun Anda tidak memiliki izin. Pastikan auth_user_id sudah terhubung di tabel employees.");
+          } else {
+            setFormError(errMsg || "Gagal membuat akun karyawan");
+          }
+          setSaving(false);
+          return;
+        }
+
+        const authUserId = result.user_id;
+
+        // 2. Insert ke tabel employees dengan auth_user_id
+        const payload = {
+          auth_user_id: authUserId,
+          employee_code: form.employee_code,
+          full_name: form.full_name,
+          email: form.email,
+          phone: form.phone || null,
+          ktp_number: form.ktp_number || null,
+          npwp: form.npwp || null,
+          date_of_birth: form.date_of_birth || null,
+          place_of_birth: form.place_of_birth || null,
+          gender: form.gender || null,
+          religion: form.religion || null,
+          marital_status: form.marital_status || null,
+          citizenship: form.citizenship || "Indonesia",
+          group_id: form.group_id || null,
+          position_id: form.position_id || null,
+          grade_id: form.grade_id || null,
+          employment_status_id: form.employment_status_id || null,
+          work_location: form.work_location || null,
+          access_type: form.access_type,
+          working_status: form.working_status,
+          join_date: form.join_date || null,
+          resignation_date: form.resignation_date || null,
+          is_active: form.is_active,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error } = await supabase.from("employees").insert(payload);
+        if (error) throw error;
+
+      } else {
+        // ── MODE EDIT ─────────────────────────────────────────────
+        const payload = {
+          employee_code: form.employee_code,
+          full_name: form.full_name,
+          email: form.email,
+          phone: form.phone || null,
+          ktp_number: form.ktp_number || null,
+          npwp: form.npwp || null,
+          date_of_birth: form.date_of_birth || null,
+          place_of_birth: form.place_of_birth || null,
+          gender: form.gender || null,
+          religion: form.religion || null,
+          marital_status: form.marital_status || null,
+          citizenship: form.citizenship || "Indonesia",
+          group_id: form.group_id || null,
+          position_id: form.position_id || null,
+          grade_id: form.grade_id || null,
+          employment_status_id: form.employment_status_id || null,
+          work_location: form.work_location || null,
+          access_type: form.access_type,
+          working_status: form.working_status,
+          join_date: form.join_date || null,
+          resignation_date: form.resignation_date || null,
+          is_active: form.is_active,
+          updated_at: new Date().toISOString(),
+        };
+
         const { error } = await supabase
           .from("employees")
           .update(payload)
           .eq("id", editTarget.id);
         if (error) throw error;
-      } else {
-        const { error } = await supabase.from("employees").insert(payload);
-        if (error) throw error;
       }
+
       setModalOpen(false);
       fetchEmployees();
+
     } catch (err: any) {
-      setFormError(err.message);
+      setFormError(err.message || "Terjadi kesalahan");
     } finally {
       setSaving(false);
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetPasswordTarget) return;
+    if (!resetPasswordValue || resetPasswordValue.length < 6) {
+      setResetPasswordError("Password minimal 6 karakter");
+      return;
+    }
+    if (resetPasswordValue !== resetPasswordConfirm) {
+      setResetPasswordError("Konfirmasi password tidak cocok");
+      return;
+    }
+    if (!resetPasswordTarget.auth_user_id) {
+      setResetPasswordError("Karyawan ini belum memiliki akun mobile");
+      return;
+    }
+
+    setResetPasswordLoading(true);
+    setResetPasswordError("");
+
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-employee-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            auth_user_id: resetPasswordTarget.auth_user_id,
+            new_password: resetPasswordValue,
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Gagal reset password");
+
+      setResetPasswordSuccess(true);
+      setTimeout(() => {
+        setResetPasswordTarget(null);
+        setResetPasswordValue("");
+        setResetPasswordConfirm("");
+        setResetPasswordSuccess(false);
+      }, 1500);
+
+    } catch (err: any) {
+      setResetPasswordError(err.message);
+    } finally {
+      setResetPasswordLoading(false);
+    }
+  };
+
   const toggleActive = async (emp: EmployeeWithRelations) => {
     setTogglingId(emp.id);
-    // Optimistic update
     setEmployees((prev) =>
       prev.map((e) => (e.id === emp.id ? { ...e, is_active: !emp.is_active } : e))
     );
@@ -245,7 +402,6 @@ export default function EmployeePage() {
       .update({ is_active: !emp.is_active })
       .eq("id", emp.id);
     if (error) {
-      // Revert on error
       setEmployees((prev) =>
         prev.map((e) => (e.id === emp.id ? { ...e, is_active: emp.is_active } : e))
       );
@@ -256,7 +412,6 @@ export default function EmployeePage() {
   const setField = (key: string, val: any) =>
     setForm((p) => ({ ...p, [key]: val }));
 
-  // Stats
   const activeCount = employees.filter((e) => e.is_active).length;
   const registeredCount = total;
 
@@ -390,7 +545,20 @@ export default function EmployeePage() {
                     className="hover:bg-gray-50/60 transition-colors"
                   >
                     <td className="font-mono text-xs text-gray-600">
-                      {emp.employee_code}
+                      <div className="flex items-center gap-1.5">
+                        {emp.employee_code}
+                        {emp.auth_user_id ? (
+                          <span
+                            title="Akun mobile aktif"
+                            className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"
+                          />
+                        ) : (
+                          <span
+                            title="Belum ada akun mobile"
+                            className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block"
+                          />
+                        )}
+                      </div>
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
@@ -405,9 +573,7 @@ export default function EmployeePage() {
                     <td className="text-gray-600 text-xs">{emp.email}</td>
                     <td>
                       {emp.group ? (
-                        <span className="badge badge-gray">
-                          {emp.group.name}
-                        </span>
+                        <span className="badge badge-gray">{emp.group.name}</span>
                       ) : (
                         <span className="text-gray-300">-</span>
                       )}
@@ -445,7 +611,6 @@ export default function EmployeePage() {
                                     86400000,
                                 );
                                 const months = Math.floor(days / 30);
-                                // const remDays = days % 30
                                 return `${Math.floor(months / 12)} Months ${months % 12} Days`;
                               })()
                             : "-"}
@@ -478,6 +643,21 @@ export default function EmployeePage() {
                         >
                           <Edit2 size={14} />
                         </button>
+                        {emp.auth_user_id && (
+                          <button
+                            onClick={() => {
+                              setResetPasswordTarget(emp);
+                              setResetPasswordValue("");
+                              setResetPasswordConfirm("");
+                              setResetPasswordError("");
+                              setResetPasswordSuccess(false);
+                            }}
+                            className="btn-icon text-orange-400"
+                            title="Reset Password"
+                          >
+                            <KeyRound size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -635,9 +815,10 @@ export default function EmployeePage() {
               <div>
                 <label className="form-label">ID Karyawan *</label>
                 <input
-                  className="form-input"
+                  className={`form-input ${!editTarget ? "bg-gray-50 font-mono" : ""}`}
                   value={form.employee_code}
                   onChange={(e) => setField("employee_code", e.target.value)}
+                  placeholder="EMP001"
                 />
               </div>
               <div>
@@ -704,12 +885,18 @@ export default function EmployeePage() {
               </div>
               <div>
                 <label className="form-label">Work Location</label>
-                <input
+                <select
                   className="form-input"
                   value={form.work_location}
                   onChange={(e) => setField("work_location", e.target.value)}
-                  placeholder="Kantor Pusat"
-                />
+                >
+                  <option value="">Pilih Lokasi</option>
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.office_name}>
+                      {z.office_name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="form-label">Join Date</label>
@@ -769,6 +956,40 @@ export default function EmployeePage() {
               </div>
             </div>
           </div>
+
+          {/* Akun Mobile — hanya saat tambah baru */}
+          {!editTarget && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                — Akun Mobile —
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Password *</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setField("password", e.target.value)}
+                    placeholder="Min. 6 karakter"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Konfirmasi Password *</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={form.confirm_password}
+                    onChange={(e) => setField("confirm_password", e.target.value)}
+                    placeholder="Ulangi password"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Password ini digunakan karyawan untuk login ke aplikasi mobile nano.HR
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -789,6 +1010,82 @@ export default function EmployeePage() {
               "Simpan"
             )}
           </button>
+        </div>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal
+        open={!!resetPasswordTarget}
+        onClose={() => {
+          setResetPasswordTarget(null);
+          setResetPasswordError("");
+        }}
+        title={`Reset Password — ${resetPasswordTarget?.full_name ?? ""}`}
+        width="max-w-sm"
+      >
+        <div className="space-y-3">
+          {resetPasswordSuccess ? (
+            <div className="flex flex-col items-center py-4 gap-3">
+              <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center">
+                <CheckCircle size={24} className="text-green-500" />
+              </div>
+              <p className="text-sm font-medium text-gray-900">
+                Password berhasil direset!
+              </p>
+            </div>
+          ) : (
+            <>
+              {resetPasswordError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {resetPasswordError}
+                </div>
+              )}
+
+              {!resetPasswordTarget?.auth_user_id && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+                  Karyawan ini belum memiliki akun mobile. Hapus dan tambahkan ulang dengan password.
+                </div>
+              )}
+
+              <div>
+                <label className="form-label">Password Baru *</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  value={resetPasswordValue}
+                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                  placeholder="Min. 6 karakter"
+                />
+              </div>
+              <div>
+                <label className="form-label">Konfirmasi Password Baru *</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  value={resetPasswordConfirm}
+                  onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                  placeholder="Ulangi password baru"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end mt-5 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => setResetPasswordTarget(null)}
+                  className="btn-secondary"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleResetPassword}
+                  disabled={resetPasswordLoading || !resetPasswordTarget?.auth_user_id}
+                  className="btn-primary"
+                >
+                  {resetPasswordLoading ? <Spinner className="w-4 h-4" /> : null}
+                  Reset Password
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>

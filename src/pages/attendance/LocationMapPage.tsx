@@ -17,6 +17,7 @@ interface ActivityItem {
   id: string
   employee_id: string
   full_name: string
+  face_photo_url: string | null
   type: 'check_in' | 'check_out'
   time: string | null
   status: string | null
@@ -92,7 +93,7 @@ export default function LocationMapPage() {
         status_in, status_out,
         location_in_status, location_out_status,
         lat_in, lng_in, lat_out, lng_out,
-        employee:employees(full_name)
+        employee:employees(full_name, face_photo_url)
       `)
       .eq('attendance_date', date)
       .order('time_in', { ascending: false })
@@ -104,6 +105,7 @@ export default function LocationMapPage() {
         items.push({
           id: `${r.id}-out`, employee_id: r.employee_id,
           full_name: r.employee?.full_name || '-',
+          face_photo_url: r.employee?.face_photo_url || null,
           type: 'check_out',
           time: r.time_out, status: r.status_out,
           location_status: r.location_out_status,
@@ -115,6 +117,7 @@ export default function LocationMapPage() {
         items.push({
           id: `${r.id}-in`, employee_id: r.employee_id,
           full_name: r.employee?.full_name || '-',
+          face_photo_url: r.employee?.face_photo_url || null,
           type: 'check_in',
           time: r.time_in, status: r.status_in,
           location_status: r.location_in_status,
@@ -333,10 +336,12 @@ export default function LocationMapPage() {
               >
                 <div className="flex items-start gap-2.5">
                   <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0 mt-0.5"
-                    style={{ background: item.type === 'check_in' ? pinColor(item.status) : '#f97316' }}
+                    className="w-7 h-7 rounded-full shrink-0 mt-0.5 overflow-hidden flex items-center justify-center text-white text-[11px] font-bold border-2"
+                    style={{ borderColor: item.type === 'check_in' ? pinColor(item.status) : '#f97316', background: item.face_photo_url ? 'transparent' : (item.type === 'check_in' ? pinColor(item.status) : '#f97316') }}
                   >
-                    {item.full_name.charAt(0)}
+                    {item.face_photo_url
+                      ? <img src={item.face_photo_url} alt="" className="w-full h-full object-cover" />
+                      : item.full_name.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{item.full_name}</p>
@@ -361,9 +366,13 @@ export default function LocationMapPage() {
         {/* Selected detail panel */}
         {selected && (
           <div className="border-t border-gray-200 p-3 bg-gray-50 shrink-0">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-bold text-gray-900 truncate">{selected.full_name}</p>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 ml-2 shrink-0">✕</button>
+            <div className="flex items-center gap-2 mb-2">
+              {selected.face_photo_url
+                ? <img src={selected.face_photo_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 border border-gray-200" />
+                : <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-bold" style={{ background: selected.type === 'check_in' ? pinColor(selected.status) : '#f97316' }}>{selected.full_name.charAt(0)}</div>
+              }
+              <p className="text-sm font-bold text-gray-900 truncate flex-1">{selected.full_name}</p>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 shrink-0">✕</button>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
               <span className="text-gray-400">Tipe</span>

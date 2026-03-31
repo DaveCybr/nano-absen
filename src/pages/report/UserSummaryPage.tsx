@@ -8,6 +8,7 @@ import type { Group } from "../../types";
 interface SummaryRow {
   employee_id: string;
   full_name: string;
+  face_photo_url: string | null;
   position: string;
   group_name: string;
   on_time: number;
@@ -130,7 +131,7 @@ export default function UserSummaryPage() {
       let empQuery = supabase
         .from("employees")
         .select(
-          "id,full_name,employee_code,group:groups(name),position:positions(name)",
+          "id,full_name,employee_code,face_photo_url,group:groups(name),position:positions(name)",
           { count: "exact" },
         )
         .eq("is_active", true)
@@ -171,6 +172,7 @@ export default function UserSummaryPage() {
         return {
           employee_id: emp.id,
           full_name: emp.full_name,
+          face_photo_url: emp.face_photo_url || null,
           position: emp.position?.name || "-",
           group_name: emp.group?.name || "-",
           on_time: d.filter((r) => r.status_in === "on_time").length,
@@ -315,7 +317,15 @@ export default function UserSummaryPage() {
             ) : (
               rows.map((row) => (
                 <tr key={row.employee_id} className="hover:bg-gray-50/60">
-                  <td className="font-medium text-gray-900">{row.full_name}</td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      {row.face_photo_url
+                        ? <img src={row.face_photo_url} alt="" className="w-7 h-7 rounded-full object-cover shrink-0 border border-gray-200" />
+                        : <div className="w-7 h-7 rounded-full shrink-0 bg-blue-100 flex items-center justify-center text-blue-600 text-[11px] font-bold">{row.full_name.charAt(0)}</div>
+                      }
+                      <span className="font-medium text-gray-900">{row.full_name}</span>
+                    </div>
+                  </td>
                   <td className="text-gray-500">{row.position}</td>
                   <td>
                     <span className="badge badge-gray">{row.group_name}</span>
