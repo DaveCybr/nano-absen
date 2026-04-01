@@ -17,6 +17,7 @@ import {
   Settings,
   Clock,
   Activity,
+  Smartphone,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -143,6 +144,12 @@ const navigation: NavSection[] = [
         label: "Company",
         icon: <Building2 size={16} />,
         path: "/settings/company",
+      },
+      {
+        id: "mobile-app",
+        label: "Mobile App",
+        icon: <Smartphone size={16} />,
+        path: "/settings/mobile-app",
       },
     ],
   },

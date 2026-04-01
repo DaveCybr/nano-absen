@@ -21,6 +21,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/settings/category": "Category",
   "/settings/zones": "Zones",
   "/settings/company": "Company",
+  "/settings/mobile-app": "Mobile App",
   "/auth/login": "Login",
   "/auth/unauthorized": "Unauthorized",
   "/setup": "Setup",
@@ -60,6 +61,7 @@ import ActivityReportPage from "./pages/report/ActivityReportPage";
 import NewsFeedPage from "./pages/manage/NewsFeedPage";
 import AuditTrailPage from "./pages/manage/AuditTrailPage";
 import CalendarPage from "./pages/manage/CalendarPage";
+import MobileAppVersionPage from "./pages/settings/MobileAppVersionPage";
 
 const adminRoles = ["admin", "hr", "super_admin"];
 
@@ -106,6 +108,7 @@ export default function App() {
               <Route path="/settings/category" element={<CategoryPage />} />
               <Route path="/settings/zones" element={<ZonesPage />} />
               <Route path="/settings/company" element={<CompanyPage />} />
+              <Route path="/settings/mobile-app" element={<MobileAppVersionPage />} />
             </Route>
           </Route>
 
