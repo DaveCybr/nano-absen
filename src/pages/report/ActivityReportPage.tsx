@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Search, Download } from 'lucide-react'
+import { Search, Download, Columns, FileText } from 'lucide-react'
 import { Spinner, EmptyState, Pagination, StatusBadge, LocationBadge, formatTime } from '../../components/ui'
 import { exportCsv, csvTime, csvMins } from '../../lib/exportCsv'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import type { Group } from '../../types'
 
 interface ActivityRow {
@@ -21,6 +23,22 @@ interface ActivityRow {
   late_minutes: number
 }
 
+const ALL_COLUMNS = [
+  { key: 'attendance_date',     label: 'Tanggal' },
+  { key: 'full_name',           label: 'Nama' },
+  { key: 'employee_code',       label: 'Kode' },
+  { key: 'group',               label: 'Grup' },
+  { key: 'time_in',             label: 'Jam Masuk' },
+  { key: 'status_in',           label: 'Status Masuk' },
+  { key: 'location_in_status',  label: 'Lokasi Masuk' },
+  { key: 'time_out',            label: 'Jam Keluar' },
+  { key: 'status_out',          label: 'Status Keluar' },
+  { key: 'work_minutes',        label: 'Jam Kerja' },
+  { key: 'late_minutes',        label: 'Terlambat' },
+] as const
+
+type ColKey = typeof ALL_COLUMNS[number]['key']
+
 export default function ActivityReportPage() {
   const today = new Date().toISOString().split('T')[0]
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
@@ -35,6 +53,26 @@ export default function ActivityReportPage() {
   const [page, setPage]               = useState(1)
   const [pageSize, setPageSize]       = useState(10)
   const [total, setTotal]             = useState(0)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+
+  // Column selector
+  const [selectedCols, setSelectedCols] = useState<Set<ColKey>>(
+    new Set(ALL_COLUMNS.map(c => c.key))
+  )
+  const [showColPicker, setShowColPicker] = useState(false)
+  const colPickerRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) {
+        setShowColPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   useEffect(() => {
     supabase.from('groups').select('id,name').order('name')
@@ -71,7 +109,84 @@ export default function ActivityReportPage() {
 
   useEffect(() => { fetchActivities() }, [fetchActivities])
 
-  const [downloading, setDownloading] = useState(false)
+  const toggleCol = (key: ColKey) => {
+    setSelectedCols(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        if (next.size === 1) return prev // must keep at least 1
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true)
+    try {
+      let q = supabase
+        .from('attendances')
+        .select('attendance_date,time_in,time_out,status_in,status_out,location_in_status,location_out_status,work_minutes,late_minutes,employee:employees(full_name,employee_code,group:groups(name))')
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
+        .order('attendance_date', { ascending: false })
+
+      if (groupFilter !== 'all') q = q.eq('employees.group_id', groupFilter)
+      if (search) q = q.ilike('employees.full_name', `%${search}%`)
+
+      const { data } = await q
+
+      const activeCols = ALL_COLUMNS.filter(c => selectedCols.has(c.key))
+
+      const doc = new jsPDF({ orientation: activeCols.length > 7 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' })
+
+      // Header
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Activity Report', 14, 16)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(120)
+      doc.text(`Periode: ${startDate} s/d ${endDate}`, 14, 23)
+      doc.text(`Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`, 14, 28)
+      doc.setTextColor(0)
+
+      const headers = activeCols.map(c => c.label)
+      const rows = (data || []).map((r: any) =>
+        activeCols.map(c => {
+          switch (c.key) {
+            case 'attendance_date':    return r.attendance_date ?? ''
+            case 'full_name':          return r.employee?.full_name ?? ''
+            case 'employee_code':      return r.employee?.employee_code ?? ''
+            case 'group':              return r.employee?.group?.name ?? ''
+            case 'time_in':            return csvTime(r.time_in)
+            case 'status_in':          return r.status_in ?? ''
+            case 'location_in_status': return r.location_in_status ?? ''
+            case 'time_out':           return csvTime(r.time_out)
+            case 'status_out':         return r.status_out ?? ''
+            case 'work_minutes':       return csvMins(r.work_minutes)
+            case 'late_minutes':       return csvMins(r.late_minutes)
+            default:                   return ''
+          }
+        })
+      )
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 33,
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 14, right: 14 },
+      })
+
+      doc.save(`activity-report_${startDate}_${endDate}.pdf`)
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
 
   const handleDownload = async () => {
     setDownloading(true)
@@ -87,17 +202,31 @@ export default function ActivityReportPage() {
       if (search) q = q.ilike('employees.full_name', `%${search}%`)
 
       const { data } = await q
-      exportCsv(`activity-report_${startDate}_${endDate}`, [
-        'Tanggal', 'Nama', 'Kode', 'Grup',
-        'Jam Masuk', 'Status Masuk', 'Lokasi Masuk',
-        'Jam Keluar', 'Status Keluar', 'Jam Kerja', 'Terlambat',
-      ], (data || []).map((r: any) => [
-        r.attendance_date,
-        r.employee?.full_name ?? '', r.employee?.employee_code ?? '', r.employee?.group?.name ?? '',
-        csvTime(r.time_in), r.status_in ?? '', r.location_in_status ?? '',
-        csvTime(r.time_out), r.status_out ?? '',
-        csvMins(r.work_minutes), csvMins(r.late_minutes),
-      ]))
+
+      // Build headers and rows based on selected columns
+      const activeCols = ALL_COLUMNS.filter(c => selectedCols.has(c.key))
+      const headers = activeCols.map(c => c.label)
+
+      const csvRows = (data || []).map((r: any) => {
+        return activeCols.map(c => {
+          switch (c.key) {
+            case 'attendance_date':    return r.attendance_date ?? ''
+            case 'full_name':          return r.employee?.full_name ?? ''
+            case 'employee_code':      return r.employee?.employee_code ?? ''
+            case 'group':              return r.employee?.group?.name ?? ''
+            case 'time_in':            return csvTime(r.time_in)
+            case 'status_in':          return r.status_in ?? ''
+            case 'location_in_status': return r.location_in_status ?? ''
+            case 'time_out':           return csvTime(r.time_out)
+            case 'status_out':         return r.status_out ?? ''
+            case 'work_minutes':       return csvMins(r.work_minutes)
+            case 'late_minutes':       return csvMins(r.late_minutes)
+            default:                   return ''
+          }
+        })
+      })
+
+      exportCsv(`activity-report_${startDate}_${endDate}`, headers, csvRows)
     } finally {
       setDownloading(false)
     }
@@ -140,10 +269,71 @@ export default function ActivityReportPage() {
               value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
           </div>
           <button onClick={fetchActivities} className="btn-primary"><Search size={14} /> Search</button>
-          <button onClick={handleDownload} disabled={downloading} className="btn-secondary ml-auto">
-            {downloading ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-            {downloading ? 'Mengunduh...' : 'Download'}
-          </button>
+
+          {/* Column picker + Download — right side */}
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Column selector dropdown */}
+            <div className="relative" ref={colPickerRef}>
+              <button
+                onClick={() => setShowColPicker(v => !v)}
+                className="btn-secondary"
+                title="Pilih kolom export"
+              >
+                <Columns size={14} />
+                Kolom ({selectedCols.size}/{ALL_COLUMNS.length})
+              </button>
+              {showColPicker && (
+                <div className="absolute right-0 top-full mt-1.5 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-2 min-w-[180px]">
+                  <div className="px-3 pb-1.5 mb-1 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Kolom CSV</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSelectedCols(new Set(ALL_COLUMNS.map(c => c.key)))}
+                        className="text-xs text-blue-500 hover:underline"
+                      >
+                        Semua
+                      </button>
+                      <span className="text-gray-200">|</span>
+                      <button
+                        onClick={() => setSelectedCols(new Set([ALL_COLUMNS[0].key]))}
+                        className="text-xs text-gray-400 hover:underline"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                  {ALL_COLUMNS.map(col => (
+                    <label
+                      key={col.key}
+                      className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50 select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCols.has(col.key)}
+                        onChange={() => toggleCol(col.key)}
+                        className="w-3.5 h-3.5 accent-blue-600 rounded"
+                      />
+                      <span className="text-sm text-gray-700">{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button onClick={handleDownload} disabled={downloading} className="btn-secondary">
+              {downloading
+                ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                : <Download size={14} />}
+              {downloading ? 'Mengunduh...' : 'CSV'}
+            </button>
+
+            <button onClick={handleDownloadPdf} disabled={downloadingPdf} className="btn-secondary text-red-600 border-red-200 hover:bg-red-50">
+              {downloadingPdf
+                ? <span className="w-3.5 h-3.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
+                : <FileText size={14} />}
+              {downloadingPdf ? 'Mengunduh...' : 'PDF'}
+            </button>
+          </div>
         </div>
       </div>
 
