@@ -3,7 +3,11 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { DateClickArg } from "@fullcalendar/interaction";
-import type { EventClickArg, DatesSetArg, EventInput } from "@fullcalendar/core";
+import type {
+  EventClickArg,
+  DatesSetArg,
+  EventInput,
+} from "@fullcalendar/core";
 import { supabase } from "../../lib/supabase";
 import { Plus, Trash2, X } from "lucide-react";
 import { Spinner } from "../../components/ui";
@@ -65,7 +69,7 @@ export default function CalendarPage() {
   const [dbEvents, setDbEvents] = useState<CalendarEvent[]>([]);
   const [nationalHolidays, setNationalHolidays] = useState<CalendarEvent[]>([]);
   const [holidayLoading, setHolidayLoading] = useState(false);
-  const [holidayError, setHolidayError] = useState('');
+  const [holidayError, setHolidayError] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Modal
@@ -81,6 +85,7 @@ export default function CalendarPage() {
   const [detailDate, setDetailDate] = useState<string | null>(null);
 
   const fetchDbEvents = useCallback(async () => {
+    console.log("CALENDAR KEY", import.meta.env.VITE_GOOGLE_CALENDAR_API_KEY);
     const { data } = await supabase
       .from("calendar_events")
       .select("*")
@@ -91,14 +96,17 @@ export default function CalendarPage() {
   const fetchNationalHolidays = useCallback(async (year: number) => {
     if (holidayCache.current[year]) {
       setNationalHolidays(holidayCache.current[year]);
-      setHolidayError('');
+      setHolidayError("");
       return;
     }
     setHolidayLoading(true);
-    setHolidayError('');
+    setHolidayError("");
     try {
       const apiKey = import.meta.env.VITE_GOOGLE_CALENDAR_API_KEY;
-      if (!apiKey) throw new Error("VITE_GOOGLE_CALENDAR_API_KEY belum diset di environment variables");
+      if (!apiKey)
+        throw new Error(
+          "VITE_GOOGLE_CALENDAR_API_KEY belum diset di environment variables",
+        );
 
       const calendarId =
         "en.indonesian%23holiday%40group.v.calendar.google.com";
@@ -116,10 +124,8 @@ export default function CalendarPage() {
       const data: GoogleCalendarEvent[] = json.items || [];
 
       const mapped: CalendarEvent[] = data.map((h) => {
-        const startDate =
-          h.start.date || h.start.dateTime?.split("T")[0] || "";
-        const endRaw =
-          h.end.date || h.end.dateTime?.split("T")[0] || startDate;
+        const startDate = h.start.date || h.start.dateTime?.split("T")[0] || "";
+        const endRaw = h.end.date || h.end.dateTime?.split("T")[0] || startDate;
         const endDate = h.end.date
           ? new Date(new Date(endRaw).getTime() - 86400000)
               .toISOString()
@@ -142,7 +148,7 @@ export default function CalendarPage() {
       setNationalHolidays(mapped);
     } catch (err: any) {
       setNationalHolidays(holidayCache.current[year] || []);
-      setHolidayError(err.message || 'Gagal memuat hari libur nasional');
+      setHolidayError(err.message || "Gagal memuat hari libur nasional");
     } finally {
       setHolidayLoading(false);
     }
@@ -171,7 +177,11 @@ export default function CalendarPage() {
       : undefined,
     backgroundColor: COLOR_MAP[e.type] || "#9ca3af",
     borderColor: COLOR_MAP[e.type] || "#9ca3af",
-    extendedProps: { type: e.type, is_national: e.is_national, description: e.description },
+    extendedProps: {
+      type: e.type,
+      is_national: e.is_national,
+      description: e.description,
+    },
   }));
 
   const getEventsForDate = (dateStr: string) =>
@@ -201,8 +211,14 @@ export default function CalendarPage() {
   };
 
   const handleSave = async () => {
-    if (!fTitle.trim()) { setFormError("Nama event wajib diisi"); return; }
-    if (!selectedDate) { setFormError("Tanggal wajib diisi"); return; }
+    if (!fTitle.trim()) {
+      setFormError("Nama event wajib diisi");
+      return;
+    }
+    if (!selectedDate) {
+      setFormError("Tanggal wajib diisi");
+      return;
+    }
     setFormError("");
     setSaving(true);
 
@@ -255,9 +271,19 @@ export default function CalendarPage() {
           )}
           {!holidayLoading && holidayError && (
             <div className="flex items-center gap-2 px-5 py-2 text-xs text-red-500 border-b border-red-100 bg-red-50">
-              <span className="font-semibold">Hari libur nasional gagal dimuat:</span> {holidayError}
-              <button onClick={() => { delete holidayCache.current[viewYear]; fetchNationalHolidays(viewYear); }}
-                className="ml-2 underline text-red-600">Coba lagi</button>
+              <span className="font-semibold">
+                Hari libur nasional gagal dimuat:
+              </span>{" "}
+              {holidayError}
+              <button
+                onClick={() => {
+                  delete holidayCache.current[viewYear];
+                  fetchNationalHolidays(viewYear);
+                }}
+                className="ml-2 underline text-red-600"
+              >
+                Coba lagi
+              </button>
             </div>
           )}
           <FullCalendar
@@ -285,8 +311,14 @@ export default function CalendarPage() {
           {/* Legend */}
           <div className="flex items-center gap-4 px-5 py-3 border-t border-gray-100 flex-wrap">
             {EVENT_CATEGORIES.map((c) => (
-              <div key={c.value} className="flex items-center gap-1.5 text-xs text-gray-600">
-                <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c.color }} />
+              <div
+                key={c.value}
+                className="flex items-center gap-1.5 text-xs text-gray-600"
+              >
+                <div
+                  className="w-2.5 h-2.5 rounded-sm"
+                  style={{ backgroundColor: c.color }}
+                />
                 {c.label}
               </div>
             ))}
@@ -300,11 +332,14 @@ export default function CalendarPage() {
             <div className="card p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-semibold text-gray-900">
-                  {new Date(detailDate + "T00:00:00").toLocaleDateString("id-ID", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })}
+                  {new Date(detailDate + "T00:00:00").toLocaleDateString(
+                    "id-ID",
+                    {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    },
+                  )}
                 </p>
                 <div className="flex items-center gap-1">
                   <button
@@ -323,16 +358,23 @@ export default function CalendarPage() {
                 </div>
               </div>
               {detailEvents.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4">Tidak ada event</p>
+                <p className="text-xs text-gray-400 text-center py-4">
+                  Tidak ada event
+                </p>
               ) : (
                 <div className="space-y-2">
                   {detailEvents.map((ev) => (
                     <div
                       key={ev.id}
-                      className={clsx("p-2.5 rounded-lg", TEXT_MAP[ev.type] || "bg-gray-50 text-gray-700")}
+                      className={clsx(
+                        "p-2.5 rounded-lg",
+                        TEXT_MAP[ev.type] || "bg-gray-50 text-gray-700",
+                      )}
                     >
                       <div className="flex items-start justify-between gap-1">
-                        <p className="text-xs font-semibold leading-tight">{ev.title}</p>
+                        <p className="text-xs font-semibold leading-tight">
+                          {ev.title}
+                        </p>
                         {!ev.is_national && (
                           <button
                             onClick={() => handleDelete(ev.id)}
@@ -343,10 +385,15 @@ export default function CalendarPage() {
                         )}
                       </div>
                       <p className="text-[10px] mt-0.5 opacity-75">
-                        {EVENT_CATEGORIES.find((c) => c.value === ev.type)?.label}
+                        {
+                          EVENT_CATEGORIES.find((c) => c.value === ev.type)
+                            ?.label
+                        }
                       </p>
                       {ev.description && (
-                        <p className="text-[10px] mt-1 opacity-70">{ev.description}</p>
+                        <p className="text-[10px] mt-1 opacity-70">
+                          {ev.description}
+                        </p>
                       )}
                     </div>
                   ))}
@@ -357,22 +404,32 @@ export default function CalendarPage() {
 
           {/* Upcoming events */}
           <div className="card p-4">
-            <p className="text-sm font-semibold text-gray-900 mb-3">Mendatang</p>
+            <p className="text-sm font-semibold text-gray-900 mb-3">
+              Mendatang
+            </p>
             <div className="space-y-2">
               {upcomingEvents.map((ev, i) => (
-                <div key={i} className="flex items-start gap-2.5 py-1.5 border-b border-gray-50 last:border-0">
+                <div
+                  key={i}
+                  className="flex items-start gap-2.5 py-1.5 border-b border-gray-50 last:border-0"
+                >
                   <div
                     className="w-2 h-2 rounded-full mt-1.5 shrink-0"
                     style={{ backgroundColor: COLOR_MAP[ev.type] || "#9ca3af" }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900 truncate">{ev.title}</p>
+                    <p className="text-xs font-medium text-gray-900 truncate">
+                      {ev.title}
+                    </p>
                     <p className="text-[10px] text-gray-400 mt-0.5">
-                      {new Date(ev.start_date + "T00:00:00").toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {new Date(ev.start_date + "T00:00:00").toLocaleDateString(
+                        "id-ID",
+                        {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        },
+                      )}
                     </p>
                   </div>
                 </div>
@@ -387,8 +444,13 @@ export default function CalendarPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-base font-semibold text-gray-900">Add Event</h3>
-              <button onClick={() => setModalOpen(false)} className="btn-icon text-gray-400">
+              <h3 className="text-base font-semibold text-gray-900">
+                Add Event
+              </h3>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="btn-icon text-gray-400"
+              >
                 <X size={16} />
               </button>
             </div>
@@ -424,7 +486,9 @@ export default function CalendarPage() {
                   onChange={(e) => setFCategory(e.target.value)}
                 >
                   {EVENT_CATEGORIES.map((c) => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -449,8 +513,17 @@ export default function CalendarPage() {
               </div>
             </div>
             <div className="flex gap-2 justify-end px-6 pb-6">
-              <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="btn-primary">
+              <button
+                onClick={() => setModalOpen(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="btn-primary"
+              >
                 {saving ? <Spinner className="w-4 h-4" /> : null} Save
               </button>
             </div>
