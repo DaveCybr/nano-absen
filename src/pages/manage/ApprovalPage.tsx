@@ -25,6 +25,7 @@ interface LeaveRequestRow {
   end_date: string;
   total_days: number;
   reason: string | null;
+  admin_notes: string | null;
   status: string;
   created_at: string;
 }
@@ -42,6 +43,7 @@ interface OvertimeRow {
   end_time: string;
   total_minutes: number;
   reason: string | null;
+  admin_notes: string | null;
   status: string;
   created_at: string;
 }
@@ -92,6 +94,8 @@ export default function ApprovalPage() {
   const [crLoading, setCrLoading] = useState(false);
   const [crDetail, setCrDetail] = useState<CorrectionRow | null>(null);
   const [adminNotes, setAdminNotes] = useState("");
+  const [leaveAdminNotes, setLeaveAdminNotes] = useState("");
+  const [otAdminNotes, setOtAdminNotes] = useState("");
 
   const [processing, setProcessing] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -191,27 +195,31 @@ export default function ApprovalPage() {
   };
 
   const handleLeaveApprove = async (id: string) => {
-    if (await approveReject("leave_requests", id, "approved")) {
+    if (await approveReject("leave_requests", id, "approved", { admin_notes: leaveAdminNotes || null })) {
       setLeaveDetail(null);
+      setLeaveAdminNotes("");
       fetchLeave();
     }
   };
   const handleLeaveReject = async (id: string) => {
-    if (await approveReject("leave_requests", id, "rejected")) {
+    if (await approveReject("leave_requests", id, "rejected", { admin_notes: leaveAdminNotes || null })) {
       setLeaveDetail(null);
+      setLeaveAdminNotes("");
       fetchLeave();
     }
   };
 
   const handleOtApprove = async (id: string) => {
-    if (await approveReject("overtime_requests", id, "approved")) {
+    if (await approveReject("overtime_requests", id, "approved", { admin_notes: otAdminNotes || null })) {
       setOtDetail(null);
+      setOtAdminNotes("");
       fetchOvertime();
     }
   };
   const handleOtReject = async (id: string) => {
-    if (await approveReject("overtime_requests", id, "rejected")) {
+    if (await approveReject("overtime_requests", id, "rejected", { admin_notes: otAdminNotes || null })) {
       setOtDetail(null);
+      setOtAdminNotes("");
       fetchOvertime();
     }
   };
@@ -656,6 +664,7 @@ export default function ApprovalPage() {
         open={!!leaveDetail}
         onClose={() => {
           setLeaveDetail(null);
+          setLeaveAdminNotes("");
           setActionError("");
         }}
         title="Detail Pengajuan Cuti"
@@ -671,20 +680,11 @@ export default function ApprovalPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
                 { label: "Karyawan", value: leaveDetail.employee?.full_name },
-                {
-                  label: "Divisi",
-                  value: leaveDetail.employee?.group?.name || "-",
-                },
-                {
-                  label: "Jenis Cuti",
-                  value: leaveDetail.leave_category?.leave_name,
-                },
+                { label: "Divisi", value: leaveDetail.employee?.group?.name || "-" },
+                { label: "Jenis Cuti", value: leaveDetail.leave_category?.leave_name },
                 { label: "Mulai", value: leaveDetail.start_date },
                 { label: "Selesai", value: leaveDetail.end_date },
-                {
-                  label: "Total Hari",
-                  value: `${leaveDetail.total_days} hari`,
-                },
+                { label: "Total Hari", value: `${leaveDetail.total_days} hari` },
                 { label: "Alasan", value: leaveDetail.reason || "-" },
                 { label: "Status", value: statusBadge(leaveDetail.status) },
               ].map(({ label, value }) => (
@@ -694,23 +694,41 @@ export default function ApprovalPage() {
                 </div>
               ))}
             </div>
-            {leaveDetail.status === "pending" && (
-              <div className="flex gap-2 pt-3 border-t border-gray-100">
-                <button
-                  onClick={() => handleLeaveReject(leaveDetail.id)}
-                  disabled={processing}
-                  className="btn-danger flex-1 justify-center"
-                >
-                  <XCircle size={14} /> Tolak
-                </button>
-                <button
-                  onClick={() => handleLeaveApprove(leaveDetail.id)}
-                  disabled={processing}
-                  className="btn-primary flex-1 justify-center bg-green-600 hover:bg-green-700"
-                >
-                  <CheckCircle size={14} /> Setujui
-                </button>
+            {leaveDetail.status === "rejected" && leaveDetail.admin_notes && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+                <p className="text-xs text-red-500 mb-1 font-medium">Catatan Penolakan</p>
+                <p className="text-sm text-red-700">{leaveDetail.admin_notes}</p>
               </div>
+            )}
+            {leaveDetail.status === "pending" && (
+              <>
+                <div>
+                  <label className="form-label">Catatan Admin (opsional)</label>
+                  <textarea
+                    className="form-input"
+                    rows={2}
+                    value={leaveAdminNotes}
+                    onChange={(e) => setLeaveAdminNotes(e.target.value)}
+                    placeholder="Alasan penolakan atau catatan lainnya..."
+                  />
+                </div>
+                <div className="flex gap-2 pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => handleLeaveReject(leaveDetail.id)}
+                    disabled={processing}
+                    className="btn-danger flex-1 justify-center"
+                  >
+                    <XCircle size={14} /> Tolak
+                  </button>
+                  <button
+                    onClick={() => handleLeaveApprove(leaveDetail.id)}
+                    disabled={processing}
+                    className="btn-primary flex-1 justify-center bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle size={14} /> Setujui
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -721,6 +739,7 @@ export default function ApprovalPage() {
         open={!!otDetail}
         onClose={() => {
           setOtDetail(null);
+          setOtAdminNotes("");
           setActionError("");
         }}
         title="Detail Pengajuan Lembur"
@@ -736,14 +755,8 @@ export default function ApprovalPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
                 { label: "Karyawan", value: otDetail.employee?.full_name },
-                {
-                  label: "Divisi",
-                  value: otDetail.employee?.group?.name || "-",
-                },
-                {
-                  label: "Kategori",
-                  value: `${otDetail.overtime_category?.code} — ${otDetail.overtime_category?.name_id}`,
-                },
+                { label: "Divisi", value: otDetail.employee?.group?.name || "-" },
+                { label: "Kategori", value: `${otDetail.overtime_category?.code} — ${otDetail.overtime_category?.name_id}` },
                 { label: "Tanggal", value: otDetail.overtime_date },
                 { label: "Jam Mulai", value: otDetail.start_time?.slice(0, 5) },
                 { label: "Jam Selesai", value: otDetail.end_time?.slice(0, 5) },
@@ -757,23 +770,41 @@ export default function ApprovalPage() {
                 </div>
               ))}
             </div>
-            {otDetail.status === "pending" && (
-              <div className="flex gap-2 pt-3 border-t border-gray-100">
-                <button
-                  onClick={() => handleOtReject(otDetail.id)}
-                  disabled={processing}
-                  className="btn-danger flex-1 justify-center"
-                >
-                  <XCircle size={14} /> Tolak
-                </button>
-                <button
-                  onClick={() => handleOtApprove(otDetail.id)}
-                  disabled={processing}
-                  className="btn-primary flex-1 justify-center bg-green-600 hover:bg-green-700"
-                >
-                  <CheckCircle size={14} /> Setujui
-                </button>
+            {otDetail.status === "rejected" && otDetail.admin_notes && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+                <p className="text-xs text-red-500 mb-1 font-medium">Catatan Penolakan</p>
+                <p className="text-sm text-red-700">{otDetail.admin_notes}</p>
               </div>
+            )}
+            {otDetail.status === "pending" && (
+              <>
+                <div>
+                  <label className="form-label">Catatan Admin (opsional)</label>
+                  <textarea
+                    className="form-input"
+                    rows={2}
+                    value={otAdminNotes}
+                    onChange={(e) => setOtAdminNotes(e.target.value)}
+                    placeholder="Alasan penolakan atau catatan lainnya..."
+                  />
+                </div>
+                <div className="flex gap-2 pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => handleOtReject(otDetail.id)}
+                    disabled={processing}
+                    className="btn-danger flex-1 justify-center"
+                  >
+                    <XCircle size={14} /> Tolak
+                  </button>
+                  <button
+                    onClick={() => handleOtApprove(otDetail.id)}
+                    disabled={processing}
+                    className="btn-primary flex-1 justify-center bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle size={14} /> Setujui
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}

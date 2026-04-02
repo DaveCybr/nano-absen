@@ -1,3 +1,19 @@
+import * as XLSX from 'xlsx'
+
+/**
+ * Export data to an Excel (.xlsx) file and trigger browser download.
+ */
+export function exportXlsx(
+  filename: string,
+  headers: string[],
+  rows: (string | number | null | undefined)[][],
+) {
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Report')
+  XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : filename + '.xlsx')
+}
+
 /**
  * Export data to a CSV file and trigger browser download.
  * Prepends UTF-8 BOM so Excel opens Indonesian characters correctly.

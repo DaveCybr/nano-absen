@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Search, Download, Columns, FileText } from 'lucide-react'
+import { Search, Download, Columns, FileText, FileSpreadsheet } from 'lucide-react'
 import { Spinner, EmptyState, Pagination, StatusBadge, LocationBadge, formatTime } from '../../components/ui'
-import { exportCsv, csvTime, csvMins } from '../../lib/exportCsv'
+import { exportCsv, exportXlsx, csvTime, csvMins } from '../../lib/exportCsv'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Group } from '../../types'
@@ -55,6 +55,7 @@ export default function ActivityReportPage() {
   const [total, setTotal]             = useState(0)
   const [downloading, setDownloading] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [downloadingXlsx, setDownloadingXlsx] = useState(false)
 
   // Column selector
   const [selectedCols, setSelectedCols] = useState<Set<ColKey>>(
@@ -232,6 +233,44 @@ export default function ActivityReportPage() {
     }
   }
 
+  const handleDownloadXlsx = async () => {
+    setDownloadingXlsx(true)
+    try {
+      let q = supabase
+        .from('attendances')
+        .select('attendance_date,time_in,time_out,status_in,status_out,location_in_status,location_out_status,work_minutes,late_minutes,employee:employees(full_name,employee_code,group:groups(name))')
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
+        .order('attendance_date', { ascending: false })
+      if (groupFilter !== 'all') q = q.eq('employees.group_id', groupFilter)
+      if (search) q = q.ilike('employees.full_name', `%${search}%`)
+      const { data } = await q
+      const activeCols = ALL_COLUMNS.filter(c => selectedCols.has(c.key))
+      const headers = activeCols.map(c => c.label)
+      const xlsxRows = (data || []).map((r: any) =>
+        activeCols.map(c => {
+          switch (c.key) {
+            case 'attendance_date':    return r.attendance_date ?? ''
+            case 'full_name':          return r.employee?.full_name ?? ''
+            case 'employee_code':      return r.employee?.employee_code ?? ''
+            case 'group':              return r.employee?.group?.name ?? ''
+            case 'time_in':            return csvTime(r.time_in)
+            case 'status_in':          return r.status_in ?? ''
+            case 'location_in_status': return r.location_in_status ?? ''
+            case 'time_out':           return csvTime(r.time_out)
+            case 'status_out':         return r.status_out ?? ''
+            case 'work_minutes':       return r.work_minutes ?? 0
+            case 'late_minutes':       return r.late_minutes ?? 0
+            default:                   return ''
+          }
+        })
+      )
+      exportXlsx(`activity-report_${startDate}_${endDate}`, headers, xlsxRows)
+    } finally {
+      setDownloadingXlsx(false)
+    }
+  }
+
   const fmtMins = (m: number) => {
     if (!m) return '-'
     const h = Math.floor(m / 60), min = m % 60
@@ -332,6 +371,13 @@ export default function ActivityReportPage() {
                 ? <span className="w-3.5 h-3.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
                 : <FileText size={14} />}
               {downloadingPdf ? 'Mengunduh...' : 'PDF'}
+            </button>
+
+            <button onClick={handleDownloadXlsx} disabled={downloadingXlsx} className="btn-secondary text-green-700 border-green-200 hover:bg-green-50">
+              {downloadingXlsx
+                ? <span className="w-3.5 h-3.5 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                : <FileSpreadsheet size={14} />}
+              {downloadingXlsx ? 'Mengunduh...' : 'Excel'}
             </button>
           </div>
         </div>
