@@ -65,6 +65,7 @@ export default function CalendarPage() {
   const [dbEvents, setDbEvents] = useState<CalendarEvent[]>([]);
   const [nationalHolidays, setNationalHolidays] = useState<CalendarEvent[]>([]);
   const [holidayLoading, setHolidayLoading] = useState(false);
+  const [holidayError, setHolidayError] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Modal
@@ -90,23 +91,28 @@ export default function CalendarPage() {
   const fetchNationalHolidays = useCallback(async (year: number) => {
     if (holidayCache.current[year]) {
       setNationalHolidays(holidayCache.current[year]);
+      setHolidayError('');
       return;
     }
     setHolidayLoading(true);
+    setHolidayError('');
     try {
       const apiKey = import.meta.env.VITE_GOOGLE_CALENDAR_API_KEY;
-      if (!apiKey) throw new Error("No API key");
+      if (!apiKey) throw new Error("VITE_GOOGLE_CALENDAR_API_KEY belum diset di environment variables");
 
       const calendarId =
-        "id.indonesian%23holiday%40group.v.calendar.google.com";
+        "en.indonesian%23holiday%40group.v.calendar.google.com";
       const timeMin = `${year}-01-01T00:00:00Z`;
       const timeMax = `${year + 1}-01-01T00:00:00Z`;
 
       const res = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?key=${apiKey}&timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=50`,
       );
-      if (!res.ok) throw new Error("API error");
       const json = await res.json();
+      if (!res.ok) {
+        const msg = json?.error?.message || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
       const data: GoogleCalendarEvent[] = json.items || [];
 
       const mapped: CalendarEvent[] = data.map((h) => {
@@ -134,8 +140,9 @@ export default function CalendarPage() {
 
       holidayCache.current[year] = mapped;
       setNationalHolidays(mapped);
-    } catch {
+    } catch (err: any) {
       setNationalHolidays(holidayCache.current[year] || []);
+      setHolidayError(err.message || 'Gagal memuat hari libur nasional');
     } finally {
       setHolidayLoading(false);
     }
@@ -243,7 +250,14 @@ export default function CalendarPage() {
         <div className="flex-1 card overflow-hidden fc-wrapper">
           {holidayLoading && (
             <div className="flex items-center gap-2 px-5 py-2 text-xs text-gray-400 border-b border-gray-100">
-              <Spinner className="w-3 h-3" /> Memuat hari libur...
+              <Spinner className="w-3 h-3" /> Memuat hari libur nasional...
+            </div>
+          )}
+          {!holidayLoading && holidayError && (
+            <div className="flex items-center gap-2 px-5 py-2 text-xs text-red-500 border-b border-red-100 bg-red-50">
+              <span className="font-semibold">Hari libur nasional gagal dimuat:</span> {holidayError}
+              <button onClick={() => { holidayCache.current[viewYear] = undefined as any; fetchNationalHolidays(viewYear); }}
+                className="ml-2 underline text-red-600">Coba lagi</button>
             </div>
           )}
           <FullCalendar
