@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { Upload, Smartphone, AlertTriangle, CheckCircle, Trash2 } from "lucide-react";
+import { Upload, Smartphone, AlertTriangle, CheckCircle, Trash2, Link } from "lucide-react";
 import { Spinner, EmptyState, Modal } from "../../components/ui";
 import clsx from "clsx";
 
@@ -19,21 +19,19 @@ export default function MobileAppVersionPage() {
   const [versions, setVersions] = useState<AppVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppVersion | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     version_name: "",
     version_code: "",
     release_notes: "",
+    apk_url: "",
     is_force_update: false,
   });
-  const [apkFile, setApkFile] = useState<File | null>(null);
 
   const fetchVersions = async () => {
     setLoading(true);
@@ -51,15 +49,11 @@ export default function MobileAppVersionPage() {
 
   const latest = versions[0] ?? null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.endsWith(".apk")) {
-      setError("File harus berformat .apk");
-      return;
-    }
-    setApkFile(file);
-    setError("");
+  // Convert Google Drive share URL to direct download URL
+  const normalizeGDriveUrl = (url: string) => {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+    return url;
   };
 
   const handleSubmit = async () => {
@@ -68,7 +62,7 @@ export default function MobileAppVersionPage() {
     if (!form.version_name.trim()) return setError("Version name wajib diisi");
     if (!form.version_code || isNaN(Number(form.version_code)))
       return setError("Version code harus berupa angka");
-    if (!apkFile) return setError("File APK wajib dipilih");
+    if (!form.apk_url.trim()) return setError("URL APK wajib diisi");
 
     const vCode = Number(form.version_code);
     if (versions.some((v) => v.version_code === vCode)) {
@@ -76,40 +70,8 @@ export default function MobileAppVersionPage() {
     }
 
     setUploading(true);
-    setUploadProgress(10);
-
     try {
-      const fileName = `nano-hr-v${form.version_name}-${vCode}.apk`;
-      const { data: session } = await supabase.auth.getSession();
-      const token = session.session?.access_token;
-
-      setUploadProgress(30);
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      const uploadRes = await fetch(
-        `${supabaseUrl}/storage/v1/object/apk-releases/${fileName}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: anonKey,
-            "Content-Type": "application/vnd.android.package-archive",
-            "x-upsert": "true",
-          },
-          body: apkFile,
-        }
-      );
-
-      setUploadProgress(80);
-
-      if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        throw new Error(`Upload gagal: ${uploadRes.status} - ${errText}`);
-      }
-
-      const apkUrl = `${supabaseUrl}/storage/v1/object/public/apk-releases/${fileName}`;
+      const apkUrl = normalizeGDriveUrl(form.apk_url.trim());
 
       // Deactivate previous versions
       await supabase.from("app_versions").update({ is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
@@ -126,18 +88,14 @@ export default function MobileAppVersionPage() {
 
       if (insertErr) throw new Error(insertErr.message);
 
-      setUploadProgress(100);
       setSuccess(`Versi ${form.version_name} berhasil dipublish!`);
-      setForm({ version_name: "", version_code: "", release_notes: "", is_force_update: false });
-      setApkFile(null);
-      if (fileRef.current) fileRef.current.value = "";
+      setForm({ version_name: "", version_code: "", release_notes: "", apk_url: "", is_force_update: false });
       setShowForm(false);
       fetchVersions();
     } catch (e: any) {
       setError(e.message || "Terjadi kesalahan");
     } finally {
       setUploading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -263,36 +221,19 @@ export default function MobileAppVersionPage() {
           </div>
 
           <div className="mb-4">
-            <label className="form-label">File APK *</label>
-            <div
-              className="border-2 border-dashed border-gray-200 rounded-xl p-5 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/40 transition-colors"
-              onClick={() => fileRef.current?.click()}
-            >
+            <label className="form-label">URL APK *</label>
+            <div className="relative">
+              <Link size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                ref={fileRef}
-                type="file"
-                accept=".apk"
-                className="hidden"
-                onChange={handleFileChange}
+                className="form-input pl-8"
+                placeholder="https://drive.google.com/file/d/... atau URL lainnya"
+                value={form.apk_url}
+                onChange={(e) => setForm({ ...form, apk_url: e.target.value })}
               />
-              {apkFile ? (
-                <div className="flex items-center justify-center gap-2 text-green-700">
-                  <CheckCircle size={16} />
-                  <span className="text-sm font-medium">{apkFile.name}</span>
-                  <span className="text-xs text-gray-400">
-                    ({(apkFile.size / 1024 / 1024).toFixed(1)} MB)
-                  </span>
-                </div>
-              ) : (
-                <div className="text-gray-400">
-                  <Upload size={22} className="mx-auto mb-1.5" />
-                  <p className="text-sm">Klik untuk pilih file .apk</p>
-                  <p className="text-xs mt-0.5">
-                    Build: <code className="bg-gray-100 px-1 rounded">flutter build apk --release</code>
-                  </p>
-                </div>
-              )}
             </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Paste link Google Drive (share → Anyone with the link). URL akan otomatis dikonversi ke direct download.
+            </p>
           </div>
 
           <div className="mb-5 flex items-center gap-3">
@@ -311,21 +252,6 @@ export default function MobileAppVersionPage() {
             </label>
           </div>
 
-          {uploading && (
-            <div className="mb-4">
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>Mengupload APK...</span>
-                <span>{uploadProgress}%</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => { setShowForm(false); setError(""); setApkFile(null); }}
@@ -339,7 +265,7 @@ export default function MobileAppVersionPage() {
               className="btn-primary"
               disabled={uploading}
             >
-              {uploading ? <><Spinner className="w-3.5 h-3.5" /> Mengupload...</> : <><Upload size={14} /> Publish</>}
+              {uploading ? <><Spinner className="w-3.5 h-3.5" /> Menyimpan...</> : <><Upload size={14} /> Publish</>}
             </button>
           </div>
         </div>
