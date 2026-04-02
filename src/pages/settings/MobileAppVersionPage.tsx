@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import {
-  Upload,
+  Plus,
   Smartphone,
   AlertTriangle,
   CheckCircle,
@@ -158,7 +158,7 @@ export default function MobileAppVersionPage() {
           }}
           className="btn-primary"
         >
-          <Upload size={14} /> Rilis Versi Baru
+          <Plus size={14} /> Rilis Versi Baru
         </button>
       </div>
 
@@ -275,8 +275,9 @@ export default function MobileAppVersionPage() {
               />
             </div>
             <p className="text-xs text-gray-400 mt-1">
-              Paste link Google Drive (share → Anyone with the link). URL akan
-              otomatis dikonversi ke direct download.
+              Masukkan URL APK, bukan upload file. Gunakan link Google Drive
+              (share → Anyone with the link) atau URL lain yang bisa langsung
+              diakses.
             </p>
           </div>
 
@@ -323,7 +324,7 @@ export default function MobileAppVersionPage() {
                 </>
               ) : (
                 <>
-                  <Upload size={14} /> Publish
+                  <CheckCircle size={14} /> Publish
                 </>
               )}
             </button>
