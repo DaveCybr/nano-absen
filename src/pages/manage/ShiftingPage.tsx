@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Edit2, Trash2, ChevronLeft, ChevronRight, Upload, Download, AlertCircle, CheckCircle } from 'lucide-react'
+import { Plus, Edit2, Trash2, ChevronLeft, ChevronRight, Upload, Download, AlertCircle, CheckCircle, FileSpreadsheet } from 'lucide-react'
 import { Spinner, Modal } from '../../components/ui'
 import type { ShiftCode, Employee, Group, Schedule } from '../../types'
 import clsx from 'clsx'
@@ -62,6 +62,7 @@ export default function ShiftingPage() {
   const [editCode, setEditCode]           = useState<ShiftCode | null>(null)
   const [deleteCode, setDeleteCode]       = useState<ShiftCode | null>(null)
   const [codeError, setCodeError]         = useState('')
+  const [deleteCodeError, setDeleteCodeError] = useState('')
   const [fCode, setFCode]     = useState('')
   const [fTitle, setFTitle]   = useState('')
   const [fIn, setFIn]         = useState('08:00')
@@ -86,14 +87,18 @@ export default function ShiftingPage() {
 
   const fetchSchedules = useCallback(async () => {
     setLoadingSched(true)
-    const { data } = await supabase
+    let q = supabase
       .from('schedules')
       .select('*, shift_code:shift_codes(id,code,title,is_holiday)')
       .gte('schedule_date', weekStart)
       .lte('schedule_date', weekEnd)
+    if (groupFilter !== 'all' && employees.length > 0) {
+      q = q.in('employee_id', employees.map(e => e.id))
+    }
+    const { data } = await q
     setSchedules((data as Schedule[]) || [])
     setLoadingSched(false)
-  }, [weekStart, weekEnd])
+  }, [weekStart, weekEnd, groupFilter, employees])
 
   useEffect(() => { fetchSchedules() }, [fetchSchedules])
 
@@ -152,6 +157,15 @@ export default function ShiftingPage() {
 
   const handleDeleteCode = async () => {
     if (!deleteCode) return
+    setDeleteCodeError('')
+    const { count } = await supabase
+      .from('schedules')
+      .select('id', { count: 'exact', head: true })
+      .eq('shift_code_id', deleteCode.id)
+    if (count && count > 0) {
+      setDeleteCodeError(`Tidak bisa dihapus — shift code ini digunakan oleh ${count} jadwal. Hapus atau ubah jadwal terlebih dahulu.`)
+      return
+    }
     await supabase.from('shift_codes').delete().eq('id', deleteCode.id)
     setDeleteCode(null)
     const { data } = await supabase.from('shift_codes').select('*').order('code')
@@ -306,13 +320,12 @@ export default function ShiftingPage() {
     setBulkError('')
     try {
       if (!bulkShiftId) {
-        // Delete all selected dates
-        for (const date of bulkDates) {
-          await supabase.from('schedules')
-            .delete()
-            .eq('employee_id', bulkEmp.id)
-            .eq('schedule_date', date)
-        }
+        // Batch delete all selected dates
+        const { error } = await supabase.from('schedules')
+          .delete()
+          .eq('employee_id', bulkEmp.id)
+          .in('schedule_date', bulkDates)
+        if (error) throw error
       } else {
         const upserts = bulkDates.map(date => ({
           employee_id: bulkEmp.id,
@@ -421,8 +434,13 @@ export default function ShiftingPage() {
                   {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                 </select>
               </div>
-              <button onClick={() => { setUploadFile(null); setUploadPreview({ headers: [], rows: [] }); setUploadResult(null); setUploadModal(true) }}
-                className="btn-secondary ml-auto"><Upload size={14} /> Upload Schedule</button>
+              <div className="flex items-center gap-2 ml-auto">
+                <button onClick={handleDownloadTemplate} className="btn-secondary">
+                  <FileSpreadsheet size={14} /> Export Schedule
+                </button>
+                <button onClick={() => { setUploadFile(null); setUploadPreview({ headers: [], rows: [] }); setUploadResult(null); setUploadModal(true) }}
+                  className="btn-secondary"><Upload size={14} /> Upload Schedule</button>
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => { const d = new Date(weekRef); d.setDate(d.getDate() - 7); setWeekRef(d) }}
                   className="btn-icon"><ChevronLeft size={16} /></button>
@@ -787,12 +805,15 @@ export default function ShiftingPage() {
       </Modal>
 
       {/* Delete confirm */}
-      <Modal open={!!deleteCode} onClose={() => setDeleteCode(null)} title="Hapus Shift Code" width="max-w-sm">
+      <Modal open={!!deleteCode} onClose={() => { setDeleteCode(null); setDeleteCodeError('') }} title="Hapus Shift Code" width="max-w-sm">
+        {deleteCodeError && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">{deleteCodeError}</div>
+        )}
         <p className="text-sm text-gray-600 mb-5">
           Yakin ingin menghapus shift code <strong>{deleteCode?.code} — {deleteCode?.title}</strong>?
         </p>
         <div className="flex gap-2 justify-end">
-          <button onClick={() => setDeleteCode(null)} className="btn-secondary">Batal</button>
+          <button onClick={() => { setDeleteCode(null); setDeleteCodeError('') }} className="btn-secondary">Batal</button>
           <button onClick={handleDeleteCode} className="btn-danger">Hapus</button>
         </div>
       </Modal>
