@@ -256,7 +256,7 @@ export default function CalendarPage() {
           {!holidayLoading && holidayError && (
             <div className="flex items-center gap-2 px-5 py-2 text-xs text-red-500 border-b border-red-100 bg-red-50">
               <span className="font-semibold">Hari libur nasional gagal dimuat:</span> {holidayError}
-              <button onClick={() => { holidayCache.current[viewYear] = undefined as any; fetchNationalHolidays(viewYear); }}
+              <button onClick={() => { delete holidayCache.current[viewYear]; fetchNationalHolidays(viewYear); }}
                 className="ml-2 underline text-red-600">Coba lagi</button>
             </div>
           )}

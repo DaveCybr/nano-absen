@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { Upload, Smartphone, AlertTriangle, CheckCircle, Trash2, Link } from "lucide-react";
+import {
+  Upload,
+  Smartphone,
+  AlertTriangle,
+  CheckCircle,
+  Trash2,
+  Link,
+} from "lucide-react";
 import { Spinner, EmptyState, Modal } from "../../components/ui";
 import clsx from "clsx";
 
@@ -52,7 +59,8 @@ export default function MobileAppVersionPage() {
   // Convert Google Drive share URL to direct download URL
   const normalizeGDriveUrl = (url: string) => {
     const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match) return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+    if (match)
+      return `https://drive.google.com/uc?export=download&id=${match[1]}`;
     return url;
   };
 
@@ -74,7 +82,10 @@ export default function MobileAppVersionPage() {
       const apkUrl = normalizeGDriveUrl(form.apk_url.trim());
 
       // Deactivate previous versions
-      await supabase.from("app_versions").update({ is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
+      await supabase
+        .from("app_versions")
+        .update({ is_active: false })
+        .neq("id", "00000000-0000-0000-0000-000000000000");
 
       // Insert new version as active
       const { error: insertErr } = await supabase.from("app_versions").insert({
@@ -89,7 +100,13 @@ export default function MobileAppVersionPage() {
       if (insertErr) throw new Error(insertErr.message);
 
       setSuccess(`Versi ${form.version_name} berhasil dipublish!`);
-      setForm({ version_name: "", version_code: "", release_notes: "", apk_url: "", is_force_update: false });
+      setForm({
+        version_name: "",
+        version_code: "",
+        release_notes: "",
+        apk_url: "",
+        is_force_update: false,
+      });
       setShowForm(false);
       fetchVersions();
     } catch (e: any) {
@@ -100,8 +117,14 @@ export default function MobileAppVersionPage() {
   };
 
   const handleSetActive = async (v: AppVersion) => {
-    await supabase.from("app_versions").update({ is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
-    await supabase.from("app_versions").update({ is_active: true }).eq("id", v.id);
+    await supabase
+      .from("app_versions")
+      .update({ is_active: false })
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase
+      .from("app_versions")
+      .update({ is_active: true })
+      .eq("id", v.id);
     fetchVersions();
   };
 
@@ -128,7 +151,11 @@ export default function MobileAppVersionPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="page-title">Mobile App Version</h1>
         <button
-          onClick={() => { setShowForm(!showForm); setError(""); setSuccess(""); }}
+          onClick={() => {
+            setShowForm(!showForm);
+            setError("");
+            setSuccess("");
+          }}
           className="btn-primary"
         >
           <Upload size={14} /> Rilis Versi Baru
@@ -137,33 +164,40 @@ export default function MobileAppVersionPage() {
 
       {/* Latest Version Banner */}
       {latest && (
-        <div className={clsx(
-          "card p-4 mb-4 flex items-start gap-3",
-          latest.is_active ? "border-l-4 border-green-500" : ""
-        )}>
+        <div
+          className={clsx(
+            "card p-4 mb-4 flex items-start gap-3",
+            latest.is_active ? "border-l-4 border-green-500" : "",
+          )}
+        >
           <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
             <Smartphone size={20} className="text-green-600" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-gray-900">
-                Versi Aktif: {versions.find(v => v.is_active)?.version_name ?? "-"}
+                Versi Aktif:{" "}
+                {versions.find((v) => v.is_active)?.version_name ?? "-"}
               </span>
               <span className="badge badge-green">
-                v{versions.find(v => v.is_active)?.version_code}
+                v{versions.find((v) => v.is_active)?.version_code}
               </span>
-              {versions.find(v => v.is_active)?.is_force_update && (
+              {versions.find((v) => v.is_active)?.is_force_update && (
                 <span className="badge badge-red flex items-center gap-1">
                   <AlertTriangle size={10} /> Force Update
                 </span>
               )}
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
-              Dirilis {fmtDate(versions.find(v => v.is_active)?.created_at ?? latest.created_at)}
+              Dirilis{" "}
+              {fmtDate(
+                versions.find((v) => v.is_active)?.created_at ??
+                  latest.created_at,
+              )}
             </p>
-            {versions.find(v => v.is_active)?.release_notes && (
+            {versions.find((v) => v.is_active)?.release_notes && (
               <p className="text-sm text-gray-600 mt-1.5">
-                {versions.find(v => v.is_active)?.release_notes}
+                {versions.find((v) => v.is_active)?.release_notes}
               </p>
             )}
           </div>
@@ -188,7 +222,9 @@ export default function MobileAppVersionPage() {
                 className="form-input"
                 placeholder="contoh: 1.0.1"
                 value={form.version_name}
-                onChange={(e) => setForm({ ...form, version_name: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, version_name: e.target.value })
+                }
               />
               <p className="text-xs text-gray-400 mt-1">
                 Harus cocok dengan version di pubspec.yaml
@@ -201,7 +237,9 @@ export default function MobileAppVersionPage() {
                 type="number"
                 placeholder="contoh: 2"
                 value={form.version_code}
-                onChange={(e) => setForm({ ...form, version_code: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, version_code: e.target.value })
+                }
               />
               <p className="text-xs text-gray-400 mt-1">
                 Angka bulat, harus lebih besar dari versi sebelumnya
@@ -216,14 +254,19 @@ export default function MobileAppVersionPage() {
               rows={3}
               placeholder="Perubahan pada versi ini..."
               value={form.release_notes}
-              onChange={(e) => setForm({ ...form, release_notes: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, release_notes: e.target.value })
+              }
             />
           </div>
 
           <div className="mb-4">
             <label className="form-label">URL APK *</label>
             <div className="relative">
-              <Link size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Link
+                size={15}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
               <input
                 className="form-input pl-8"
                 placeholder="https://drive.google.com/file/d/... atau URL lainnya"
@@ -232,7 +275,8 @@ export default function MobileAppVersionPage() {
               />
             </div>
             <p className="text-xs text-gray-400 mt-1">
-              Paste link Google Drive (share → Anyone with the link). URL akan otomatis dikonversi ke direct download.
+              Paste link Google Drive (share → Anyone with the link). URL akan
+              otomatis dikonversi ke direct download.
             </p>
           </div>
 
@@ -241,10 +285,15 @@ export default function MobileAppVersionPage() {
               type="checkbox"
               id="force-update"
               checked={form.is_force_update}
-              onChange={(e) => setForm({ ...form, is_force_update: e.target.checked })}
+              onChange={(e) =>
+                setForm({ ...form, is_force_update: e.target.checked })
+              }
               className="w-4 h-4 rounded accent-red-500"
             />
-            <label htmlFor="force-update" className="text-sm font-medium text-gray-700">
+            <label
+              htmlFor="force-update"
+              className="text-sm font-medium text-gray-700"
+            >
               Force Update{" "}
               <span className="text-xs text-gray-400 font-normal">
                 — user tidak bisa tutup popup, wajib update
@@ -254,7 +303,10 @@ export default function MobileAppVersionPage() {
 
           <div className="flex gap-2 justify-end">
             <button
-              onClick={() => { setShowForm(false); setError(""); setApkFile(null); }}
+              onClick={() => {
+                setShowForm(false);
+                setError("");
+              }}
               className="btn-secondary"
               disabled={uploading}
             >
@@ -265,7 +317,15 @@ export default function MobileAppVersionPage() {
               className="btn-primary"
               disabled={uploading}
             >
-              {uploading ? <><Spinner className="w-3.5 h-3.5" /> Menyimpan...</> : <><Upload size={14} /> Publish</>}
+              {uploading ? (
+                <>
+                  <Spinner className="w-3.5 h-3.5" /> Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Upload size={14} /> Publish
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -305,11 +365,21 @@ export default function MobileAppVersionPage() {
                 <EmptyState message="Belum ada versi yang dirilis" />
               ) : (
                 versions.map((v) => (
-                  <tr key={v.id} className={clsx("hover:bg-gray-50/60", v.is_active && "bg-green-50/40")}>
+                  <tr
+                    key={v.id}
+                    className={clsx(
+                      "hover:bg-gray-50/60",
+                      v.is_active && "bg-green-50/40",
+                    )}
+                  >
                     <td>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900">{v.version_name}</span>
-                        <span className="badge badge-gray text-xs">code {v.version_code}</span>
+                        <span className="font-semibold text-gray-900">
+                          {v.version_name}
+                        </span>
+                        <span className="badge badge-gray text-xs">
+                          code {v.version_code}
+                        </span>
                       </div>
                       {v.apk_url && (
                         <a
@@ -323,7 +393,9 @@ export default function MobileAppVersionPage() {
                       )}
                     </td>
                     <td className="text-sm text-gray-600 max-w-xs">
-                      {v.release_notes || <span className="text-gray-300">-</span>}
+                      {v.release_notes || (
+                        <span className="text-gray-300">-</span>
+                      )}
                     </td>
                     <td>
                       {v.is_force_update ? (
@@ -382,15 +454,20 @@ export default function MobileAppVersionPage() {
         {deleteTarget && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Hapus versi <strong>{deleteTarget.version_name}</strong> (code {deleteTarget.version_code})?
+              Hapus versi <strong>{deleteTarget.version_name}</strong> (code{" "}
+              {deleteTarget.version_code})?
               {deleteTarget.is_active && (
                 <span className="block mt-1 text-red-600 font-medium">
-                  ⚠ Ini adalah versi aktif. Pastikan ada versi lain yang diaktifkan.
+                  ⚠ Ini adalah versi aktif. Pastikan ada versi lain yang
+                  diaktifkan.
                 </span>
               )}
             </p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setDeleteTarget(null)} className="btn-secondary">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="btn-secondary"
+              >
                 Batal
               </button>
               <button
@@ -398,7 +475,11 @@ export default function MobileAppVersionPage() {
                 disabled={deleting}
                 className="btn-danger"
               >
-                {deleting ? <Spinner className="w-3.5 h-3.5" /> : <Trash2 size={14} />}
+                {deleting ? (
+                  <Spinner className="w-3.5 h-3.5" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
                 Hapus
               </button>
             </div>
