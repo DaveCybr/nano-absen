@@ -43,6 +43,19 @@ function parseScheduleTime(timeStr: string): Date {
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+function gpsErrorMessage(code: number, fallback: string): string {
+  if (code === 1) {
+    return IS_IOS
+      ? "Akses lokasi ditolak. Buka: Pengaturan → Safari → Lokasi → Izinkan Saat Menggunakan Aplikasi, lalu muat ulang halaman dan coba lagi."
+      : "Akses lokasi ditolak. Aktifkan izin lokasi di pengaturan browser lalu coba lagi.";
+  }
+  if (code === 2) return "Sinyal GPS lemah. Pastikan berada di tempat terbuka dan coba lagi.";
+  if (code === 3) return "Timeout mengambil lokasi. Pastikan GPS aktif dan coba lagi.";
+  return fallback;
+}
+
 export default function EmployeeAttendance() {
   const { employee } = useAuth();
   const navigate = useNavigate();
@@ -143,73 +156,6 @@ export default function EmployeeAttendance() {
     streamRef.current = null;
   };
 
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-  const gpsErrorMessage = (code: number, fallback: string): string => {
-    if (code === 1) {
-      return isIOS
-        ? "Akses lokasi ditolak. Buka: Pengaturan → Safari → Lokasi → Izinkan Saat Menggunakan Aplikasi, lalu coba lagi."
-        : "Akses lokasi ditolak. Aktifkan izin lokasi di pengaturan browser lalu coba lagi.";
-    }
-    if (code === 2) return "Sinyal GPS lemah. Pastikan berada di tempat terbuka dan coba lagi.";
-    if (code === 3) return "Timeout mengambil lokasi. Pastikan GPS aktif dan coba lagi.";
-    return fallback;
-  };
-
-  const startGps = useCallback(async () => {
-    setStep("gps");
-    setGpsError("");
-
-    if (!navigator.geolocation) {
-      setGpsError("Browser tidak mendukung GPS. Gunakan Safari versi terbaru.");
-      setStep("ready");
-      return;
-    }
-
-    // Cek status permission sebelum request — iOS tidak munculkan popup jika sudah denied
-    if (navigator.permissions) {
-      try {
-        const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName });
-        if (perm.state === "denied") {
-          setGpsError(gpsErrorMessage(1, "Akses lokasi ditolak."));
-          setStep("ready");
-          return;
-        }
-      } catch { /* permissions API tidak tersedia di semua browser, lanjut saja */ }
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setUserLat(latitude);
-        setUserLng(longitude);
-
-        // Find nearest zone
-        let nearest: Zone | null = null;
-        let minDist = Infinity;
-        for (const z of zones) {
-          const d = haversineMeters(latitude, longitude, z.latitude, z.longitude);
-          if (d < minDist) { minDist = d; nearest = z; }
-        }
-        setNearestZone(nearest);
-        setLocationDistance(nearest ? Math.round(minDist) : null);
-
-        let status = "out_of_area";
-        if (nearest) {
-          if (minDist <= nearest.radius_meters) status = "in_area";
-          else if (minDist <= nearest.radius_meters * 1.5) status = "tolerance";
-        }
-        setLocationStatus(status);
-        startCamera();
-      },
-      (err) => {
-        setGpsError(gpsErrorMessage(err.code, err.message || "Gagal mendapatkan lokasi."));
-        setStep("ready");
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  }, [zones]);
-
   const startCamera = useCallback(async () => {
     setStep("camera");
     setCameraError("");
@@ -244,6 +190,59 @@ export default function EmployeeAttendance() {
     setFaceError("");
     startCamera();
   };
+
+  const startGps = useCallback(async () => {
+    setStep("gps");
+    setGpsError("");
+
+    if (!navigator.geolocation) {
+      setGpsError("Browser tidak mendukung GPS. Gunakan Safari versi terbaru.");
+      setStep("ready");
+      return;
+    }
+
+    // Cek permission state sebelum request — iOS tidak munculkan popup jika sudah denied
+    if (navigator.permissions) {
+      try {
+        const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+        if (perm.state === "denied") {
+          setGpsError(gpsErrorMessage(1, "Akses lokasi ditolak."));
+          setStep("ready");
+          return;
+        }
+      } catch { /* permissions API tidak tersedia di semua browser */ }
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setUserLat(latitude);
+        setUserLng(longitude);
+
+        let nearest: Zone | null = null;
+        let minDist = Infinity;
+        for (const z of zones) {
+          const d = haversineMeters(latitude, longitude, z.latitude, z.longitude);
+          if (d < minDist) { minDist = d; nearest = z; }
+        }
+        setNearestZone(nearest);
+        setLocationDistance(nearest ? Math.round(minDist) : null);
+
+        let status = "out_of_area";
+        if (nearest) {
+          if (minDist <= nearest.radius_meters) status = "in_area";
+          else if (minDist <= nearest.radius_meters * 1.5) status = "tolerance";
+        }
+        setLocationStatus(status);
+        startCamera();
+      },
+      (err) => {
+        setGpsError(gpsErrorMessage(err.code, err.message || "Gagal mendapatkan lokasi."));
+        setStep("ready");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }, [zones, startCamera]);
 
   const submitAttendance = async () => {
     if (!capturedImage || !employee) return;
@@ -524,7 +523,7 @@ export default function EmployeeAttendance() {
                     <AlertTriangle size={15} className="text-red-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-red-700 font-medium">{gpsError}</p>
                   </div>
-                  {isIOS && (
+                  {IS_IOS && (
                     <div className="bg-white rounded-lg p-3 space-y-1.5 border border-red-100">
                       <p className="text-[11px] font-semibold text-gray-600">Cara mengaktifkan lokasi di iPhone:</p>
                       {[
