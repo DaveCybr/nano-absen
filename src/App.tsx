@@ -6,6 +6,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/employee/dashboard": "Beranda",
   "/employee/attendance": "Absensi",
   "/employee/leave": "Cuti",
+  "/employee/enroll-face": "Daftar Wajah",
   "/summary-report": "Summary Report",
   "/attendance/location-map": "Location Map",
   "/attendance/issue": "Issue Attendance",
@@ -47,6 +48,7 @@ import EmployeeLogin from "./pages/employee/EmployeeLogin";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
 import EmployeeAttendance from "./pages/employee/EmployeeAttendance";
 import EmployeeLeave from "./pages/employee/EmployeeLeave";
+import EmployeeEnrollFace from "./pages/employee/EmployeeEnrollFace";
 import Login from "./pages/auth/Login";
 import AuthCallback from "./pages/auth/AuthCallback";
 import Unauthorized from "./pages/auth/Unauthorized";
@@ -129,6 +131,7 @@ export default function App() {
               <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
               <Route path="/employee/attendance" element={<EmployeeAttendance />} />
               <Route path="/employee/leave" element={<EmployeeLeave />} />
+              <Route path="/employee/enroll-face" element={<EmployeeEnrollFace />} />
             </Route>
           </Route>
 

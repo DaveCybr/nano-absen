@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { formatTime } from "../../components/ui";
-import { Camera, CheckCircle } from "lucide-react";
+import { Camera, CheckCircle, AlertTriangle } from "lucide-react";
 import type { Attendance } from "../../types";
 
 interface TodaySchedule {
@@ -157,6 +157,22 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="space-y-4">
+      {/* Banner wajah belum terdaftar */}
+      {!employee?.face_photo_url && (
+        <button
+          onClick={() => navigate("/employee/enroll-face")}
+          className="w-full flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-left hover:bg-yellow-100 transition-colors"
+        >
+          <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center shrink-0">
+            <AlertTriangle size={16} className="text-yellow-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-yellow-800">Wajah belum terdaftar</p>
+            <p className="text-xs text-yellow-600">Daftar sekarang untuk bisa absensi →</p>
+          </div>
+        </button>
+      )}
+
       {/* Greeting */}
       <div className="pt-1">
         <p className="text-sm text-gray-500">{greeting},</p>

@@ -238,7 +238,7 @@ export default function EmployeeAttendance() {
     if (!capturedImage || !employee) return;
 
     if (!employee.face_photo_url) {
-      setFaceError("Foto wajah belum terdaftar. Hubungi HR untuk mendaftarkan wajah.");
+      navigate("/employee/enroll-face");
       return;
     }
 
@@ -399,6 +399,31 @@ export default function EmployeeAttendance() {
           </p>
           <button onClick={() => navigate("/employee/dashboard")} className="btn-secondary mt-2">
             <ArrowLeft size={14} /> Kembali ke Beranda
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "ready" && !employee?.face_photo_url) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-bold text-gray-900 pt-1">Absensi</h1>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center text-center gap-4">
+          <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center">
+            <AlertTriangle size={28} className="text-yellow-500" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Wajah Belum Terdaftar</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Kamu perlu mendaftarkan wajah terlebih dahulu sebelum bisa melakukan absensi.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/employee/enroll-face")}
+            className="btn-primary w-full justify-center"
+          >
+            Daftar Wajah Sekarang
           </button>
         </div>
       </div>
