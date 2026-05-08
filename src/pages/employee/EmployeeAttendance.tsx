@@ -13,6 +13,7 @@ type Step =
   | "done_today"
   | "ready"
   | "gps"
+  | "camera_ready"
   | "camera"
   | "confirm"
   | "verifying"
@@ -191,7 +192,7 @@ export default function EmployeeAttendance() {
     startCamera();
   };
 
-  const startGps = useCallback(async () => {
+  const startGps = useCallback(() => {
     setStep("gps");
     setGpsError("");
 
@@ -201,18 +202,7 @@ export default function EmployeeAttendance() {
       return;
     }
 
-    // Cek permission state sebelum request — iOS tidak munculkan popup jika sudah denied
-    if (navigator.permissions) {
-      try {
-        const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName });
-        if (perm.state === "denied") {
-          setGpsError(gpsErrorMessage(1, "Akses lokasi ditolak."));
-          setStep("ready");
-          return;
-        }
-      } catch { /* permissions API tidak tersedia di semua browser */ }
-    }
-
+    // Panggil getCurrentPosition langsung tanpa await agar iOS tidak kehilangan user gesture context
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
@@ -234,7 +224,7 @@ export default function EmployeeAttendance() {
           else if (minDist <= nearest.radius_meters * 1.5) status = "tolerance";
         }
         setLocationStatus(status);
-        startCamera();
+        setStep("camera_ready");
       },
       (err) => {
         setGpsError(gpsErrorMessage(err.code, err.message || "Gagal mendapatkan lokasi."));
@@ -242,7 +232,7 @@ export default function EmployeeAttendance() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
-  }, [zones, startCamera]);
+  }, [zones]);
 
   const submitAttendance = async () => {
     if (!capturedImage || !employee) return;
@@ -548,6 +538,30 @@ export default function EmployeeAttendance() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Camera ready step — tombol terpisah agar getUserMedia dipanggil langsung dari user gesture */}
+      {step === "camera_ready" && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className={`px-4 py-2 text-xs font-medium flex items-center gap-1.5 ${locationBadge().cls}`}>
+            <MapPin size={12} />
+            {locationBadge().label}
+          </div>
+          <div className="p-6 flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center">
+              <CheckCircle size={24} className="text-green-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800">Lokasi didapat!</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Sekarang buka kamera untuk verifikasi wajah.
+              </p>
+            </div>
+            <button onClick={startCamera} className="btn-primary w-full justify-center">
+              <Camera size={15} /> Buka Kamera
+            </button>
+          </div>
         </div>
       )}
 
