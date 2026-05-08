@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchEmployee = async (userId: string) => {
     const { data, error } = await supabase
       .from('employees')
-      .select('*, group:groups(id,name), position:positions(id,name,code)')
+      .select('*, group:groups(*), position:positions(id,name,code)')
       .eq('auth_user_id', userId)
       .eq('is_active', true)
       .maybeSingle()
