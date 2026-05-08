@@ -143,14 +143,41 @@ export default function EmployeeAttendance() {
     streamRef.current = null;
   };
 
-  const startGps = useCallback(() => {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  const gpsErrorMessage = (code: number, fallback: string): string => {
+    if (code === 1) {
+      return isIOS
+        ? "Akses lokasi ditolak. Buka: Pengaturan → Safari → Lokasi → Izinkan Saat Menggunakan Aplikasi, lalu coba lagi."
+        : "Akses lokasi ditolak. Aktifkan izin lokasi di pengaturan browser lalu coba lagi.";
+    }
+    if (code === 2) return "Sinyal GPS lemah. Pastikan berada di tempat terbuka dan coba lagi.";
+    if (code === 3) return "Timeout mengambil lokasi. Pastikan GPS aktif dan coba lagi.";
+    return fallback;
+  };
+
+  const startGps = useCallback(async () => {
     setStep("gps");
     setGpsError("");
+
     if (!navigator.geolocation) {
-      setGpsError("Browser tidak mendukung geolocation.");
+      setGpsError("Browser tidak mendukung GPS. Gunakan Safari versi terbaru.");
       setStep("ready");
       return;
     }
+
+    // Cek status permission sebelum request — iOS tidak munculkan popup jika sudah denied
+    if (navigator.permissions) {
+      try {
+        const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+        if (perm.state === "denied") {
+          setGpsError(gpsErrorMessage(1, "Akses lokasi ditolak."));
+          setStep("ready");
+          return;
+        }
+      } catch { /* permissions API tidak tersedia di semua browser, lanjut saja */ }
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
@@ -176,7 +203,7 @@ export default function EmployeeAttendance() {
         startCamera();
       },
       (err) => {
-        setGpsError(err.message || "Gagal mendapatkan lokasi. Izinkan akses lokasi dan coba lagi.");
+        setGpsError(gpsErrorMessage(err.code, err.message || "Gagal mendapatkan lokasi."));
         setStep("ready");
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
@@ -492,9 +519,28 @@ export default function EmployeeAttendance() {
                 )}
               </div>
               {gpsError && (
-                <div className="w-full p-3 bg-red-50 rounded-lg flex items-center gap-2 text-left">
-                  <AlertTriangle size={14} className="text-red-500 shrink-0" />
-                  <p className="text-xs text-red-700">{gpsError}</p>
+                <div className="w-full bg-red-50 rounded-xl p-4 text-left space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={15} className="text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700 font-medium">{gpsError}</p>
+                  </div>
+                  {isIOS && (
+                    <div className="bg-white rounded-lg p-3 space-y-1.5 border border-red-100">
+                      <p className="text-[11px] font-semibold text-gray-600">Cara mengaktifkan lokasi di iPhone:</p>
+                      {[
+                        "Buka Pengaturan (Settings)",
+                        "Pilih Safari",
+                        "Pilih Lokasi (Location)",
+                        'Pilih "Izinkan Saat Menggunakan Aplikasi"',
+                        "Kembali ke halaman ini dan coba lagi",
+                      ].map((step, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-[10px] font-bold text-blue-600 shrink-0 mt-0.5">{i + 1}.</span>
+                          <p className="text-[11px] text-gray-600">{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <button onClick={startGps} className="btn-primary w-full justify-center">
