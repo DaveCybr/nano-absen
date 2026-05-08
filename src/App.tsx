@@ -2,6 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { useEffect } from "react";
 
 const PAGE_TITLES: Record<string, string> = {
+  "/employee/login": "Login Karyawan",
+  "/employee/dashboard": "Beranda",
+  "/employee/attendance": "Absensi",
+  "/employee/leave": "Cuti",
   "/summary-report": "Summary Report",
   "/attendance/location-map": "Location Map",
   "/attendance/issue": "Issue Attendance",
@@ -37,7 +41,12 @@ function TitleManager() {
 }
 import { AuthProvider } from "./hooks/useAuth";
 import AppLayout from "./components/layout/AppLayout";
+import EmployeeLayout from "./components/layout/EmployeeLayout";
 import ProtectedRoute from "./components/ui/ProtectedRoute";
+import EmployeeLogin from "./pages/employee/EmployeeLogin";
+import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
+import EmployeeAttendance from "./pages/employee/EmployeeAttendance";
+import EmployeeLeave from "./pages/employee/EmployeeLeave";
 import Login from "./pages/auth/Login";
 import AuthCallback from "./pages/auth/AuthCallback";
 import Unauthorized from "./pages/auth/Unauthorized";
@@ -64,6 +73,7 @@ import CalendarPage from "./pages/manage/CalendarPage";
 import MobileAppVersionPage from "./pages/settings/MobileAppVersionPage";
 
 const adminRoles = ["admin", "hr", "super_admin"];
+const staffRoles = ["staff"];
 
 export default function App() {
   return (
@@ -73,6 +83,7 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/auth/login" element={<Login />} />
+          <Route path="/employee/login" element={<EmployeeLogin />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/auth/unauthorized" element={<Unauthorized />} />
           <Route path="/setup" element={<InitSetup />} />
@@ -112,6 +123,16 @@ export default function App() {
             </Route>
           </Route>
 
+          {/* Employee portal */}
+          <Route element={<ProtectedRoute allowedRoles={staffRoles} loginRedirect="/employee/login" />}>
+            <Route element={<EmployeeLayout />}>
+              <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+              <Route path="/employee/attendance" element={<EmployeeAttendance />} />
+              <Route path="/employee/leave" element={<EmployeeLeave />} />
+            </Route>
+          </Route>
+
+          <Route path="/employee" element={<Navigate to="/employee/login" replace />} />
           <Route path="/dashboard" element={<Navigate to="/summary-report" replace />} />
           <Route path="/" element={<Navigate to="/summary-report" replace />} />
           <Route path="*" element={<Navigate to="/summary-report" replace />} />

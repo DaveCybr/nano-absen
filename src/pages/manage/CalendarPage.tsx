@@ -85,7 +85,6 @@ export default function CalendarPage() {
   const [detailDate, setDetailDate] = useState<string | null>(null);
 
   const fetchDbEvents = useCallback(async () => {
-    console.log("CALENDAR KEY", import.meta.env.VITE_GOOGLE_CALENDAR_API_KEY);
     const { data } = await supabase
       .from("calendar_events")
       .select("*")

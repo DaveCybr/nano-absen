@@ -3,9 +3,10 @@ import { useAuth } from "../../hooks/useAuth";
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
+  loginRedirect?: string;
 }
 
-export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
+export default function ProtectedRoute({ allowedRoles, loginRedirect = "/auth/login" }: ProtectedRouteProps) {
   const { session, employee, loading } = useAuth();
 
   if (loading) {
@@ -19,7 +20,7 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     );
   }
 
-  if (!session) return <Navigate to="/auth/login" replace />;
+  if (!session) return <Navigate to={loginRedirect} replace />;
 
   if (!employee) return <Navigate to="/auth/unauthorized" replace />;
 

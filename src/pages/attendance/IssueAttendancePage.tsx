@@ -22,25 +22,34 @@ export default function IssueAttendancePage() {
   const [date, setDate]             = useState(today)
   const [scheduleFilter, setScheduleFilter] = useState('all')
   const [search, setSearch]         = useState('')
-  const [allEvents, setAllEvents]   = useState<IssueRow[]>([])
-  const [loading, setLoading]       = useState(false)
+  const [allEvents, setAllEvents]       = useState<IssueRow[]>([])
+  const [scheduledEmpIds, setScheduledEmpIds] = useState<Set<string>>(new Set())
+  const [loading, setLoading]           = useState(false)
   const [page, setPage]             = useState(1)
   const [pageSize, setPageSize]     = useState(10)
 
   const fetchIssues = useCallback(async () => {
     setLoading(true)
     try {
-      const { data } = await supabase
-        .from('attendances')
-        .select(`
-          id, employee_id, attendance_date,
-          time_in, time_out,
-          status_in, status_out,
-          location_in_status, location_out_status,
-          employee:employees(full_name, face_photo_url)
-        `)
-        .eq('attendance_date', date)
-        .order('time_in', { ascending: false })
+      const [{ data }, { data: schedules }] = await Promise.all([
+        supabase
+          .from('attendances')
+          .select(`
+            id, employee_id, attendance_date,
+            time_in, time_out,
+            status_in, status_out,
+            location_in_status, location_out_status,
+            employee:employees(full_name, face_photo_url)
+          `)
+          .eq('attendance_date', date)
+          .order('time_in', { ascending: false }),
+        supabase
+          .from('schedules')
+          .select('employee_id')
+          .eq('schedule_date', date),
+      ])
+
+      setScheduledEmpIds(new Set((schedules || []).map((s: any) => s.employee_id)))
 
       // Flatten each attendance record into separate check_in / check_out events
       const events: IssueRow[] = []
@@ -57,10 +66,13 @@ export default function IssueAttendancePage() {
 
   useEffect(() => { fetchIssues() }, [fetchIssues])
 
-  // Filter by search client-side, then paginate the events
-  const filtered = search
-    ? allEvents.filter(r => r.employee?.full_name?.toLowerCase().includes(search.toLowerCase()))
-    : allEvents
+  // Filter by schedule type and search client-side, then paginate
+  const filtered = allEvents.filter(r => {
+    if (scheduleFilter === 'shifting' && !scheduledEmpIds.has(r.employee_id)) return false
+    if (scheduleFilter === 'regular'  &&  scheduledEmpIds.has(r.employee_id)) return false
+    if (search && !r.employee?.full_name?.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
 
   const total = filtered.length
   const rows  = filtered.slice((page - 1) * pageSize, page * pageSize)

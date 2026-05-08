@@ -30,7 +30,11 @@ export default function AuthCallback() {
         .maybeSingle();
 
       if (employee) {
-        navigate("/summary-report", { replace: true });
+        if (employee.access_type === "staff") {
+          navigate("/employee/dashboard", { replace: true });
+        } else {
+          navigate("/summary-report", { replace: true });
+        }
         return;
       }
 

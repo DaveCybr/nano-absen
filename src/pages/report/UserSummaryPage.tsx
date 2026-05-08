@@ -104,14 +104,24 @@ export default function UserSummaryPage() {
     if (!employees?.length) return [];
 
     const empIds = employees.map((e: any) => e.id);
-    const { data: attendances } = await supabase
-      .from("attendances").select("employee_id,status_in,location_in_status,time_out")
-      .in("employee_id", empIds)
-      .gte("attendance_date", startDate).lte("attendance_date", endDate);
+    const [{ data: attendances }, { data: leaves }] = await Promise.all([
+      supabase.from("attendances").select("employee_id,status_in,location_in_status,time_out")
+        .in("employee_id", empIds)
+        .gte("attendance_date", startDate).lte("attendance_date", endDate),
+      supabase.from("leave_requests").select("employee_id,total_days")
+        .eq("status", "approved")
+        .in("employee_id", empIds)
+        .lte("start_date", endDate).gte("end_date", startDate),
+    ]);
 
     const attMap = (attendances || []).reduce<Record<string, any[]>>((acc, r) => {
       if (!acc[r.employee_id]) acc[r.employee_id] = [];
       acc[r.employee_id].push(r);
+      return acc;
+    }, {});
+
+    const leaveMap = (leaves || []).reduce<Record<string, number>>((acc, r) => {
+      acc[r.employee_id] = (acc[r.employee_id] || 0) + r.total_days;
       return acc;
     }, {});
 
@@ -125,7 +135,7 @@ export default function UserSummaryPage() {
         on_time:             d.filter((r: any) => r.status_in === "on_time").length,
         in_tolerance:        d.filter((r: any) => r.status_in === "in_tolerance").length,
         late:                d.filter((r: any) => r.status_in === "late").length,
-        leave:               0,
+        leave:               leaveMap[emp.id] || 0,
         correction_time:     d.filter((r: any) => r.status_in === "others").length,
         in_location:         d.filter((r: any) => r.location_in_status === "in_area").length,
         tolerance_location:  d.filter((r: any) => r.location_in_status === "tolerance").length,
@@ -206,14 +216,24 @@ export default function UserSummaryPage() {
       setTotal(count || 0);
 
       const empIds = employees.map((e: any) => e.id);
-      const { data: attendances } = await supabase
-        .from("attendances").select("employee_id,status_in,location_in_status,time_out")
-        .in("employee_id", empIds)
-        .gte("attendance_date", startDate).lte("attendance_date", endDate);
+      const [{ data: attendances }, { data: leaves }] = await Promise.all([
+        supabase.from("attendances").select("employee_id,status_in,location_in_status,time_out")
+          .in("employee_id", empIds)
+          .gte("attendance_date", startDate).lte("attendance_date", endDate),
+        supabase.from("leave_requests").select("employee_id,total_days")
+          .eq("status", "approved")
+          .in("employee_id", empIds)
+          .lte("start_date", endDate).gte("end_date", startDate),
+      ]);
 
       const attMap = (attendances || []).reduce<Record<string, any[]>>((acc, r) => {
         if (!acc[r.employee_id]) acc[r.employee_id] = [];
         acc[r.employee_id].push(r);
+        return acc;
+      }, {});
+
+      const leaveMap = (leaves || []).reduce<Record<string, number>>((acc, r) => {
+        acc[r.employee_id] = (acc[r.employee_id] || 0) + r.total_days;
         return acc;
       }, {});
 
@@ -229,7 +249,7 @@ export default function UserSummaryPage() {
           on_time:             d.filter((r: any) => r.status_in === "on_time").length,
           in_tolerance:        d.filter((r: any) => r.status_in === "in_tolerance").length,
           late:                d.filter((r: any) => r.status_in === "late").length,
-          leave: 0,
+          leave: leaveMap[emp.id] || 0,
           correction_time:     d.filter((r: any) => r.status_in === "others").length,
           in_location:         d.filter((r: any) => r.location_in_status === "in_area").length,
           tolerance_location:  d.filter((r: any) => r.location_in_status === "tolerance").length,
