@@ -246,7 +246,7 @@ export default function EmployeeEnrollFace() {
                   autoPlay
                   playsInline
                   muted
-                  className="w-full aspect-[4/3] object-cover"
+                  className="w-full aspect-[4/3] object-cover scale-x-[-1]"
                 />
                 {/* Face guide overlay */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
