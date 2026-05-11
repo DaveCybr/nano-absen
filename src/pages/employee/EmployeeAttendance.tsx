@@ -46,14 +46,21 @@ const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
+// Deteksi in-app browser (WhatsApp, LINE, Instagram, Gmail, dll) — geolocation sering diblokir di sana
+const isInAppBrowser = (() => {
+  const ua = navigator.userAgent;
+  return /FBAN|FBAV|Instagram|Line\/|WhatsApp|Snapchat|Twitter|MicroMessenger|GSA\//.test(ua)
+    || (IS_IOS && /CriOS|FxiOS/.test(ua)); // Chrome/Firefox iOS (bukan Safari)
+})();
+
 function gpsErrorMessage(code: number, fallback: string): string {
   if (code === 1) {
     return IS_IOS
-      ? "Akses lokasi ditolak. Buka: Pengaturan → Safari → Lokasi → Izinkan Saat Menggunakan Aplikasi, lalu muat ulang halaman dan coba lagi."
+      ? "Akses lokasi ditolak oleh iOS. Cek dua tempat:\n1) Pengaturan → Privasi & Keamanan → Layanan Lokasi → pastikan ON\n2) Pengaturan → Safari → Lokasi → pilih \"Izinkan Saat Menggunakan Aplikasi\""
       : "Akses lokasi ditolak. Aktifkan izin lokasi di pengaturan browser lalu coba lagi.";
   }
-  if (code === 2) return "Sinyal GPS lemah. Pastikan berada di tempat terbuka dan coba lagi.";
-  if (code === 3) return "Timeout mengambil lokasi. Pastikan GPS aktif dan coba lagi.";
+  if (code === 2) return "Sinyal GPS lemah. Pindah ke tempat terbuka atau dekat jendela, lalu coba lagi.";
+  if (code === 3) return "Waktu habis mengambil lokasi. Pastikan GPS aktif lalu coba lagi.";
   return fallback;
 }
 
@@ -79,6 +86,8 @@ export default function EmployeeAttendance() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const gpsWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gpsActiveRef = useRef(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState("");
 
@@ -147,9 +156,13 @@ export default function EmployeeAttendance() {
     load();
   }, [employee, today]);
 
-  // Cleanup camera on unmount
+  // Cleanup on unmount
   useEffect(() => {
-    return () => stopCamera();
+    return () => {
+      stopCamera();
+      if (gpsWatchdogRef.current) clearTimeout(gpsWatchdogRef.current);
+      gpsActiveRef.current = false;
+    };
   }, []);
 
   const stopCamera = () => {
@@ -192,19 +205,46 @@ export default function EmployeeAttendance() {
     startCamera();
   };
 
+  const cancelGps = useCallback(() => {
+    gpsActiveRef.current = false;
+    if (gpsWatchdogRef.current) clearTimeout(gpsWatchdogRef.current);
+    setStep("ready");
+  }, []);
+
   const startGps = useCallback(() => {
     setStep("gps");
     setGpsError("");
+    gpsActiveRef.current = true;
+
+    // Clear existing watchdog
+    if (gpsWatchdogRef.current) clearTimeout(gpsWatchdogRef.current);
 
     if (!navigator.geolocation) {
+      gpsActiveRef.current = false;
       setGpsError("Browser tidak mendukung GPS. Gunakan Safari versi terbaru.");
       setStep("ready");
       return;
     }
 
+    // Watchdog: jika tidak ada respons dalam 18 detik, tampilkan error (silent failure di beberapa iOS)
+    gpsWatchdogRef.current = setTimeout(() => {
+      if (!gpsActiveRef.current) return;
+      gpsActiveRef.current = false;
+      setGpsError(
+        IS_IOS
+          ? "Lokasi tidak merespons. Pastikan:\n• Layanan Lokasi aktif (Pengaturan → Privasi & Keamanan → Layanan Lokasi)\n• Safari diizinkan (Pengaturan → Safari → Lokasi → Izinkan)"
+          : "Lokasi tidak merespons. Pastikan GPS aktif dan izin lokasi sudah diberikan."
+      );
+      setStep("ready");
+    }, 18000);
+
     // Panggil getCurrentPosition langsung tanpa await agar iOS tidak kehilangan user gesture context
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!gpsActiveRef.current) return;
+        gpsActiveRef.current = false;
+        if (gpsWatchdogRef.current) clearTimeout(gpsWatchdogRef.current);
+
         const { latitude, longitude } = pos.coords;
         setUserLat(latitude);
         setUserLng(longitude);
@@ -227,6 +267,9 @@ export default function EmployeeAttendance() {
         setStep("camera_ready");
       },
       (err) => {
+        if (!gpsActiveRef.current) return;
+        gpsActiveRef.current = false;
+        if (gpsWatchdogRef.current) clearTimeout(gpsWatchdogRef.current);
         setGpsError(gpsErrorMessage(err.code, err.message || "Gagal mendapatkan lokasi."));
         setStep("ready");
       },
@@ -501,6 +544,20 @@ export default function EmployeeAttendance() {
         </div>
       </div>
 
+      {/* In-app browser warning (WhatsApp, Gmail, dll) */}
+      {isInAppBrowser && step === "ready" && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-start gap-2.5">
+          <AlertTriangle size={16} className="text-orange-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-orange-800">Buka di Safari untuk absensi</p>
+            <p className="text-xs text-orange-700 mt-0.5">
+              Browser in-app (WhatsApp, Gmail, dll.) memblokir akses lokasi.
+              Ketuk ikon <span className="font-bold">⋯</span> atau <span className="font-bold">↗</span> lalu pilih <span className="font-bold">"Buka di Safari"</span>.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* GPS step */}
       {(step === "ready" || step === "gps") && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col items-center text-center gap-4">
@@ -511,8 +568,15 @@ export default function EmployeeAttendance() {
               </div>
               <div>
                 <p className="font-semibold text-gray-800">Mengambil lokasi...</p>
-                <p className="text-sm text-gray-500 mt-1">Pastikan GPS aktif dan izin lokasi sudah diberikan.</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {IS_IOS
+                    ? "Ketuk \"Izinkan\" pada popup yang muncul dari iOS."
+                    : "Izinkan akses lokasi pada popup browser."}
+                </p>
               </div>
+              <button onClick={cancelGps} className="text-sm text-gray-400 hover:text-gray-600 underline underline-offset-2">
+                Batalkan
+              </button>
             </>
           ) : (
             <>
@@ -536,23 +600,38 @@ export default function EmployeeAttendance() {
                 <div className="w-full bg-red-50 rounded-xl p-4 text-left space-y-2">
                   <div className="flex items-start gap-2">
                     <AlertTriangle size={15} className="text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-700 font-medium">{gpsError}</p>
+                    <p className="text-xs text-red-700 font-medium whitespace-pre-line">{gpsError}</p>
                   </div>
                   {IS_IOS && (
-                    <div className="bg-white rounded-lg p-3 space-y-1.5 border border-red-100">
-                      <p className="text-[11px] font-semibold text-gray-600">Cara mengaktifkan lokasi di iPhone:</p>
-                      {[
-                        "Buka Pengaturan (Settings)",
-                        "Pilih Safari",
-                        "Pilih Lokasi (Location)",
-                        'Pilih "Izinkan Saat Menggunakan Aplikasi"',
-                        "Kembali ke halaman ini dan coba lagi",
-                      ].map((step, i) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <span className="text-[10px] font-bold text-blue-600 shrink-0 mt-0.5">{i + 1}.</span>
-                          <p className="text-[11px] text-gray-600">{step}</p>
-                        </div>
-                      ))}
+                    <div className="bg-white rounded-lg p-3 space-y-2 border border-red-100">
+                      <p className="text-[11px] font-semibold text-gray-700">Langkah mengaktifkan lokasi di iPhone:</p>
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold text-blue-700">① Cek Layanan Lokasi (wajib aktif):</p>
+                        {[
+                          "Buka Pengaturan → Privasi & Keamanan",
+                          "Pilih Layanan Lokasi",
+                          "Pastikan tombol hijau (ON)",
+                        ].map((s, i) => (
+                          <div key={i} className="flex items-start gap-1.5 pl-2">
+                            <span className="text-[10px] text-gray-400 shrink-0 mt-0.5">•</span>
+                            <p className="text-[11px] text-gray-600">{s}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold text-blue-700">② Izin Safari:</p>
+                        {[
+                          "Buka Pengaturan → Safari",
+                          "Pilih Lokasi",
+                          'Pilih "Izinkan Saat Menggunakan Aplikasi"',
+                          "Kembali ke sini dan coba lagi",
+                        ].map((s, i) => (
+                          <div key={i} className="flex items-start gap-1.5 pl-2">
+                            <span className="text-[10px] text-gray-400 shrink-0 mt-0.5">•</span>
+                            <p className="text-[11px] text-gray-600">{s}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
