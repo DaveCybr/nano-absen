@@ -94,17 +94,13 @@ export default function SummaryReport() {
       const rows = (data || []) as AttendanceRow[];
 
       exportCsv(`summary-report_${startDate}_${endDate}`, [
-        "Tanggal", "Nama", "Kode", "Grup",
-        "Jam Masuk", "Status Masuk", "Lokasi Masuk",
-        "Jam Keluar", "Status Keluar", "Jam Kerja", "Terlambat",
+        "Tanggal", "Nama",
+        "Jam Masuk", "Jam Keluar", "Total Jam Kerja",
       ], rows.map(r => [
         r.attendance_date,
         r.employee?.full_name ?? '',
-        r.employee?.employee_code ?? '',
-        r.employee?.group?.name ?? '',
-        csvTime(r.time_in), r.status_in ?? '', r.location_in_status ?? '',
-        csvTime(r.time_out), r.status_out ?? '',
-        csvMins(r.work_minutes), csvMins(r.late_minutes),
+        csvTime(r.time_in), csvTime(r.time_out),
+        csvMins(r.work_minutes),
       ]));
     } finally {
       setDownloading(false);
